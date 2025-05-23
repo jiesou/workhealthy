@@ -52,7 +52,7 @@ export default {
         }
       }
       // 默认地址
-      this.videoUrl = 'http://10.55.2.59:8081/mjpeg';
+      this.videoUrl = 'http://localhost:8081/mjpeg';
     },
     /**
      * 采集当前MJPEG流画面并上传签到

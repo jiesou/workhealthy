@@ -79,7 +79,7 @@ export default {
   },
   data() {
     return {
-      videoUrl: ' http://10.55.2.59:8081/mjpeg',
+      videoUrl: ' http://localhost:8081/mjpeg',
       personDetected: false,
       isActive: false,
       cupDetected: false,
