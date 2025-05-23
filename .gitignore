@@ -1,0 +1,46 @@
+# Python虚拟环境
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VSCode等编辑器配置
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# 前端依赖
+node_modules/
+dist/
+
+# 环境变量和配置
+.env
+.env.*
+
+# 数据库和缓存
+
+# 日志和临时文件
+*.log
+*.tmp
+*.bak
+backend/signin_images/
+
+# 模型和大文件
+backend/models/
+
+# 图片、视频缓存
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.avi
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 其他
+frontend/public/
