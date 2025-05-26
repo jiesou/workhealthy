@@ -17,21 +17,9 @@
                   class="form-control" 
                   id="videoUrl" 
                   v-model="settings.videoUrl"
-                  placeholder="例如: http://192.168.4.1:81/stream 或 0（本地摄像头）"
+                  placeholder="例如: http://127.0.0.1/api/video_feed"
                 >
-                <div class="form-text">输入摄像头提供的视频流URL地址或摄像头索引（0表示默认摄像头）</div>
-              </div>
-              
-              <div class="mb-3">
-                <label for="videoProxyUrl" class="form-label">视频代理URL</label>
-                <input 
-                  type="text" 
-                  class="form-control" 
-                  id="videoProxyUrl" 
-                  v-model="settings.videoProxyUrl"
-                  placeholder="例如: http://10.55.2.59:8081/mjpeg"
-                >
-                <div class="form-text">输入视频代理服务器提供的MJPEG流地址（前端直接显示）</div>
+                <div class="form-text">输入摄像头提供的视频流URL地址，前端直接显示</div>
               </div>
               
               <div class="mb-3 form-check">
@@ -170,8 +158,7 @@ export default {
   data() {
     return {
       settings: {
-        videoUrl: 'http://192.168.4.1:81/stream',
-        videoProxyUrl: 'http://localhost:8081/mjpeg',
+        videoUrl: 'http://127.0.0.1/api/video_feed',
         enableVideoProcessing: true,
         enableYoloProcessing: true,
         detectionInterval: 5,

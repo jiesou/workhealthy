@@ -156,8 +156,8 @@ export default {
       if (savedSettings) {
         try {
           const settings = JSON.parse(savedSettings);
-          if (settings.videoProxyUrl) {
-            this.videoUrl = settings.videoProxyUrl;
+          if (settings.videoUrl) {
+            this.videoUrl = settings.videoUrl;
           }
         } catch (e) {
           console.error('解析保存的设置失败:', e);
