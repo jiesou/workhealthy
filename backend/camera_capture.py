@@ -1,5 +1,6 @@
 import asyncio
 from socket import timeout
+import time
 import websockets
 import cv2
 import numpy as np
@@ -14,13 +15,10 @@ class CameraCapture:
     """
 
     def __init__(self):
-        self.cam_ws_url = os.getenv("CAM_WS_URL", "ws://192.168.10.100/ws")
         self.latest_frame = None
         self.is_running = False
         self.frame_lock = threading.Lock()  # 保护最新帧边界完整，必须使用锁
         self.connected = False
-
-        self.start()
 
     async def _connect_and_receive(self):
         """连接 WebSocket 并接收视频帧"""
@@ -68,8 +66,9 @@ class CameraCapture:
     websockets 客户端库是 async 的。
     """
 
-    def start(self):
+    def start(self, video_url):
         """启动 WebSocket 客户端，在线程中运行异步事件循环"""
+        self.cam_ws_url = video_url
         if not self.is_running:
             self.is_running = True
             self.thread = threading.Thread(
@@ -83,20 +82,7 @@ class CameraCapture:
             self.thread.join()
 
     def read(self):
-        # 节流：每次读取间隔至少100ms（10fps）
-        if not hasattr(self, '_last_read_time'):
-            self._last_read_time = 0
-        now = cv2.getTickCount() / cv2.getTickFrequency()
-        elapsed = now - self._last_read_time
-        if elapsed < 0.1:
-            # 阻塞直到100ms过去
-            to_sleep = 0.1 - elapsed
-            if to_sleep > 0:
-                threading.Event().wait(to_sleep)
-        self._last_read_time = cv2.getTickCount() / cv2.getTickFrequency()
-
         with self.frame_lock:
-            print("[CameraCapture] 读取最新帧", self.latest_frame.shape if self.latest_frame is not None else 'None')
             if self.latest_frame is not None:
                 return True, self.latest_frame.copy()
             return False, None

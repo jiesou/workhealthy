@@ -59,7 +59,7 @@ class VideoProcessor:
         self.enable_yolo_processing = True
         
         # 帧率控制
-        self.frame_interval = 0.05  # 每帧之间的最小时间间隔（秒）
+        self.frame_interval = 0.1  # 每帧之间的最小时间间隔（秒）
         self.last_process_time = time.time()
         # 新增：YOLO检测频率控制
         self.yolo_interval = 0.2  # YOLO检测最小间隔（秒）
@@ -145,9 +145,15 @@ class VideoProcessor:
         
         while self.is_running:
             try:
+                cap = None
                 # 尝试打开视频流
-                # cap = cv2.VideoCapture(self.video_url)
-                cap = cameraCapture
+                if self.video_url.startswith("ws://"):
+                    cameraCapture.start(self.video_url)
+                    cap = cameraCapture
+                else:
+                    cap = cv2.VideoCapture(self.video_url)
+                
+                print(f"[DEBUG] 尝试打开视频流: {cap}")
                 
                 # 设置缓冲区大小
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -160,9 +166,19 @@ class VideoProcessor:
                 #     raise ValueError("无法打开视频流")
                 
                 while self.is_running:
+
                     frame_timing = {}
                     frame_timing['frame_id'] = self.frame_id
                     frame_start_time = time.time()
+
+                    # 帧率控制：检查是否到了处理下一帧的时间
+                    if frame_start_time - self.last_process_time < self.frame_interval:
+                        # 等待剩余时间
+                        remaining_time = self.frame_interval - \
+                            (frame_start_time - self.last_process_time)
+                        time.sleep(remaining_time)
+                    self.last_process_time = time.time()
+
 
                     # 采集帧开始
                     fetch_start = time.time()
@@ -172,7 +188,7 @@ class VideoProcessor:
                     if not ret:
                         raise ValueError("读取视频帧失败")
                     
-                    print(f"[DEBUG] 读取帧 {self.frame_id} 成功，时间: {frame_timing['fetch']}ms")
+                    print(f"[DEBUG] 读取帧 {frame.shape} 成功，时间: {frame_timing['fetch']}ms")
 
                     # 1. 存入帧缓冲区，并更新最新帧和时间戳
                     with self.frame_lock:
@@ -230,7 +246,7 @@ class VideoProcessor:
                 time.sleep(0.5)
                 
             finally:
-                if 'cap' in locals():
+                if 'cap' in locals() and cap is not None:
                     cap.release()
     
     def _analyze_frame(self, frame, frame_timing=None):

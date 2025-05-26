@@ -120,17 +120,7 @@ async def video_feed():
         while True:
             frame = health_monitor.get_latest_frame()
             if frame is not None:
-                # 添加状态信息到视频帧
-                status = health_monitor.get_status()
-                
-                # 添加文本信息
-                cv2.putText(frame, f"人体检测: {'是' if status.get('person_detected') else '否'}", 
-                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                cv2.putText(frame, f"活动状态: {'活动' if status.get('is_active') else '静止'}", 
-                            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                cv2.putText(frame, f"水杯检测: {'是' if status.get('cup_detected') else '否'}", 
-                            (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                
+                print(f"[video_feed] 生成新帧: {frame.shape}")
                 # 转换为JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
                 frame_bytes = jpeg.tobytes()
