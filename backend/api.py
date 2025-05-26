@@ -12,6 +12,7 @@ import os
 from contextlib import asynccontextmanager
 import face_recognition
 import pickle
+from ultralytics import YOLO
 
 from database import crud, get_db
 from .health_monitor import HealthMonitor
@@ -24,6 +25,10 @@ ENCODINGS_PATH = "backend/facedata_encodings.pkl"
 # 全局变量：已知人脸特征和姓名
 KNOWN_ENCODINGS = []
 KNOWN_NAMES = []
+
+# 单独为刷脸签到加载 best.pt
+BEST_MODEL_PATH = "backend/best.pt"
+best_yolo_model = YOLO(BEST_MODEL_PATH)
 
 def load_facedata():
     """加载人脸库特征到内存，支持特征缓存"""
@@ -289,7 +294,7 @@ def detect_hat_with_yolo(image_path, yolo_model):
             cls_idx = int(box.cls[0])
             # 检查类别名是否为 'hat'
             if hasattr(yolo_model, 'names'):
-                if yolo_model.names[cls_idx] == 'hat':
+                if yolo_model.names[cls_idx] == 'Hardhat':
                     return True
     return False
 
@@ -331,10 +336,9 @@ async def face_signin(image: UploadFile = File(...), db: Session = Depends(get_d
     THRESHOLD = 0.4
     if min_distance < THRESHOLD:
         name = KNOWN_NAMES[min_index]
-        # 4. 检测安全帽
-        yolo_model = health_monitor.video_processor.model
-        if yolo_model is not None:
-            has_hat = detect_hat_with_yolo(image_path, yolo_model)
+        # 4. 检测安全帽，使用best.pt模型
+        if best_yolo_model is not None:
+            has_hat = detect_hat_with_yolo(image_path, best_yolo_model)
             if not has_hat:
                 result = "签到失败，请携带安全设备上岗"
                 crud.create_signin_record(db, name=name, image_path=image_path, result=result)

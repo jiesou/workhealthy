@@ -1,67 +1,62 @@
 <template>
-  <div>
-    <h1 class="mb-4">实时监控</h1>
+  <div class="dashboard-container">
+    <h1 class="dashboard-title">实时监控</h1>
     
-    <div class="row mb-4">
-      <div class="col-md-8">
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <span>视频监控</span>
-            <span v-if="lastUpdated" class="text-muted small">
+    <div class="dashboard-grid">
+      <div class="video-section">
+        <div class="glass-card">
+          <div class="card-header">
+            <span class="header-title">视频监控</span>
+            <span v-if="lastUpdated" class="update-time">
               最后更新: {{ lastUpdated }}
             </span>
           </div>
-          <div class="card-body text-center">
-            <img :src="videoUrl" alt="视频监控" class="img-fluid rounded" style="max-height: 400px;">
+          <div class="video-container">
+            <img :src="videoUrl" alt="视频监控" class="video-feed">
+            <div class="video-overlay" v-if="!videoUrl">
+              <div class="loading-spinner"></div>
+            </div>
           </div>
         </div>
       </div>
       
-      <div class="col-md-4">
+      <div class="health-section">
         <HealthAdvice :metrics="health_metrics" />
       </div>
     </div>
     
-    <div class="row mb-4">
-      <div class="col-md-3">
-        <StatusCard 
-          title="人体检测" 
-          :status="personDetected ? '已检测到' : '未检测到'" 
-          :description="personDetected ? '工位有人' : '工位无人'"
-          icon="person"
-          :type="personDetected ? 'success' : 'info'"
-        />
-      </div>
+    <div class="status-grid">
+      <StatusCard 
+        title="人体检测" 
+        :status="personDetected ? '已检测到' : '未检测到'" 
+        :description="personDetected ? '工位有人' : '工位无人'"
+        icon="person"
+        :type="personDetected ? 'success' : 'info'"
+      />
       
-      <div class="col-md-3">
-        <StatusCard 
-          title="活动状态" 
-          :status="isActive ? '活动中' : '静止中'" 
-          :description="isActive ? '检测到活动' : '未检测到活动'"
-          icon="activity"
-          :type="isActive ? 'success' : (inactiveTime > 15 ? 'warning' : 'info')"
-        />
-      </div>
+      <StatusCard 
+        title="活动状态" 
+        :status="isActive ? '活动中' : '静止中'" 
+        :description="isActive ? '检测到活动' : '未检测到活动'"
+        icon="activity"
+        :type="isActive ? 'success' : (inactiveTime > 15 ? 'warning' : 'info')"
+      />
       
-      <div class="col-md-3">
-        <StatusCard 
-          title="水杯检测" 
-          :status="cupDetected ? '已检测到' : '未检测到'" 
-          :description="cupDetected ? '注意补水' : '记得喝水'"
-          icon="cup"
-          :type="cupDetected ? 'success' : (sinceCupTime > 60 ? 'warning' : 'info')"
-        />
-      </div>
+      <StatusCard 
+        title="水杯检测" 
+        :status="cupDetected ? '已检测到' : '未检测到'" 
+        :description="cupDetected ? '注意补水' : '记得喝水'"
+        icon="cup"
+        :type="cupDetected ? 'success' : (sinceCupTime > 60 ? 'warning' : 'info')"
+      />
       
-      <div class="col-md-3">
-        <StatusCard 
-          title="工作时长" 
-          :status="formatSessionWorkDuration" 
-          :description="'工作时长'"
-          icon="time"
-          :type="'success'"
-        />
-      </div>
+      <StatusCard 
+        title="工作时长" 
+        :status="formatSessionWorkDuration" 
+        :description="'工作时长'"
+        icon="time"
+        :type="'success'"
+      />
     </div>
   </div>
 </template>
@@ -254,4 +249,130 @@ export default {
     }
   }
 }
-</script> 
+</script>
+
+<style scoped>
+.dashboard-container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.dashboard-title {
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin-bottom: 2rem;
+  color: #1d1d1f;
+  letter-spacing: -0.5px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.video-section {
+  position: relative;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.3s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-5px);
+}
+
+.card-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.update-time {
+  font-size: 0.875rem;
+  color: #86868b;
+}
+
+.video-container {
+  position: relative;
+  padding: 1rem;
+  background: #f5f5f7;
+  border-radius: 0 0 20px 20px;
+}
+
+.video-feed {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #0071e3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .status-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 1rem;
+  }
+  
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style> 
