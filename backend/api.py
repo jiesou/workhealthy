@@ -115,7 +115,7 @@ async def get_status():
 
 @app.get("/video_feed")
 async def video_feed():
-    """提供视频流"""
+    """向前端提供 mjpeg 视频流"""
     async def generate():
         while True:
             frame = health_monitor.get_latest_frame()

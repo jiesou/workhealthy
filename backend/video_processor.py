@@ -7,6 +7,8 @@ from io import BytesIO
 from PIL import Image
 import os
 import threading
+# 导入摄像头捕获单例
+from backend.camera_capture import cameraCapture
 
 # 在导入YOLO之前设置torch.load配置
 try:
@@ -132,7 +134,7 @@ class VideoProcessor:
         except Exception as e:
             print("[DEBUG] OpenCV setLogLevel not available or failed:", e)
         
-        # 创建备用图像
+        # 创建备用图像（暂无作用）
         backup_frame = np.zeros((480, 640, 3), dtype=np.uint8)
         cv2.putText(backup_frame, "视频流不可用", (180, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         
@@ -144,7 +146,8 @@ class VideoProcessor:
         while self.is_running:
             try:
                 # 尝试打开视频流
-                cap = cv2.VideoCapture(self.video_url)
+                # cap = cv2.VideoCapture(self.video_url)
+                cap = cameraCapture
                 
                 # 设置缓冲区大小
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -153,8 +156,8 @@ class VideoProcessor:
                 cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
                 cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
                 
-                if not cap.isOpened():
-                    raise ValueError("无法打开视频流")
+                # if not cap.isOpened():
+                #     raise ValueError("无法打开视频流")
                 
                 while self.is_running:
                     frame_timing = {}
@@ -168,6 +171,8 @@ class VideoProcessor:
                     frame_timing['fetch'] = int((fetch_end - fetch_start) * 1000)
                     if not ret:
                         raise ValueError("读取视频帧失败")
+                    
+                    print(f"[DEBUG] 读取帧 {self.frame_id} 成功，时间: {frame_timing['fetch']}ms")
 
                     # 1. 存入帧缓冲区，并更新最新帧和时间戳
                     with self.frame_lock:
@@ -212,16 +217,17 @@ class VideoProcessor:
 
                     self.frame_id += 1
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                failure_count += 1
-                print(f"视频流错误 ({failure_count}/{max_failures}): {str(e)}")
+                print(f"视频流处理出错: {e}")
+                # import traceback
+                # traceback.print_exc()
+                # failure_count += 1
+                # print(f"视频流错误 ({failure_count}/{max_failures}): {str(e)}")
                 
-                # 指数退避重试
-                if failure_count > max_failures:
-                    retry_interval = min(retry_interval * 2, 30)
+                # # 指数退避重试
+                # if failure_count > max_failures:
+                #     retry_interval = min(retry_interval * 2, 30)
                 
-                time.sleep(retry_interval)
+                time.sleep(0.5)
                 
             finally:
                 if 'cap' in locals():
