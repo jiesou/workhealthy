@@ -1,8 +1,8 @@
 #include "CamServer.h"
 #include <WiFiUdp.h>
-#define CHUNK_LENGTH 1023
+#define CHUNK_LENGTH 1472
 
-static int udp_socket = -1;
+static struct netconn *udp_conn = NULL;
 static struct sockaddr_in server_addr;
 
 void CamServer::init()
@@ -14,46 +14,42 @@ void CamServer::update()
 {
 }
 
-int sendWithRetry(int sockfd, const void *buf, size_t len, int flags,
-                             const struct sockaddr *dest_addr, socklen_t addrlen)
+void CamServer::sendUdpWithNetconn(struct netconn *conn, const void *data, size_t len)
 {
-    while (1)
-    {
-        int sent = sendto(sockfd, buf, len, flags, dest_addr, addrlen);
-        if (sent == (int)len)
-        {
-            return sent; // 成功发送
-        }
-        if (sent == -1 && (errno == ENOMEM))
-        {
-            delay(80); // 短暂等待（根据实际调整）
-            continue;
-        }
-        // 其他错误直接退出
-        Serial.printf("Send error: %d (errno=%d)\n", sent, errno);
-        return -1;
+    struct netbuf *buf = netbuf_new();
+    if (!buf) {
+        Serial.println("Failed to allocate netbuf.");
+        return;
     }
+    void *buf_data = netbuf_alloc(buf, len);
+    if (!buf_data) {
+        Serial.println("Failed to allocate netbuf data.");
+        netbuf_delete(buf);
+        return;
+    }
+    memcpy(buf_data, data, len);
+    netconn_send(conn, buf);
+    netbuf_delete(buf);
 }
 
 void CamServer::setupConnection()
 {
-    if (udp_socket != -1)
+    if (udp_conn)
     {
-        close(udp_socket);
+        netconn_delete(udp_conn);
+        udp_conn = NULL;
     }
-    udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udp_socket < 0)
+
+    udp_conn = netconn_new(NETCONN_UDP);
+    netconn_set_nonblocking(udp_conn, 0);
+    netconn_bind(udp_conn, &udpServerIP, udpServerPort);
+    if (!udp_conn)
     {
-        Serial.println("Failed to create UDP socket.");
+        Serial.println("Failed to create UDP netconn.");
         return;
     }
-    server_addr.sin_addr.s_addr = udpServerIP; // 服务器 IP 地址
-    server_addr.sin_family = AF_INET; // IPv4
-    server_addr.sin_port = htons(udpServerPort); // 服务器端口号
 
-    int flags = fcntl(udp_socket, F_GETFL, 0);
-    fcntl(udp_socket, F_SETFL, flags & ~O_NONBLOCK); // 清除非阻塞标志
-    Serial.println("UDP Socket started.");
+    Serial.println("UDP Netconn started.");
 }
 
 // 性能统计变量
@@ -68,15 +64,13 @@ void CamServer::broadcastImg(uint8_t *img_buf, size_t img_len)
     for (uint8_t i = 0; i < img_len / buffer_len; ++i)
     {
         memcpy(buffer, img_buf + (i * buffer_len), buffer_len);
-        sendWithRetry(udp_socket, buffer, buffer_len, 0,
-                          (struct sockaddr *)&server_addr, sizeof(server_addr));
+        sendUdpWithNetconn(udp_conn, buffer, buffer_len);
     }
     // 最后一小截不满 CHUNK_LENGTH 的包
     if (rest)
     {
         memcpy(buffer, img_buf + (img_len - rest), rest);
-        sendWithRetry(udp_socket, buffer, rest, 0,
-                          (struct sockaddr *)&server_addr, sizeof(server_addr));
+        sendUdpWithNetconn(udp_conn, buffer, rest);
     }
 
     unsigned long current_time = millis();
@@ -84,8 +78,6 @@ void CamServer::broadcastImg(uint8_t *img_buf, size_t img_len)
     // 输出当前帧信息
     Serial.printf("[CamServer] Frame #%lu: %zu bytes, interval: %lu ms\n",
         frame_count, img_len, current_time - start_frame_time);
-    start_frame_time = current_time;
-    delay(10); // 延时 10ms，避免过快发送
 }
 
 CamServer camServer;

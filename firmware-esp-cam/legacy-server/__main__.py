@@ -12,7 +12,7 @@ app = FastAPI()
 # UDP 接收参数
 UDP_IP = "0.0.0.0"
 UDP_PORT = 8099
-MAX_PACKET_SIZE = 1024
+MAX_PACKET_SIZE = 1472
 
 # 图像缓存（frame_id -> [packet_index -> data]）
 frame_cache = defaultdict(dict)
