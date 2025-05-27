@@ -105,15 +105,15 @@ void loop()
 {
   // camServer.update(); // 必须每次都调用
 
-  // unsigned long now = millis();
-  // if (now - lastCaptureTime > 100)
-  // { // 控制 10 帧
+  unsigned long now = millis();
+  if (now - lastCaptureTime > 100)
+  { // 控制 10 帧
     fb = esp_camera_fb_get();
     if (fb)
     {
       camServer.broadcastImg(fb->buf, fb->len);
       esp_camera_fb_return(fb);
     }
-    // lastCaptureTime = now;
-  // }
+    lastCaptureTime = now;
+  }
 }
