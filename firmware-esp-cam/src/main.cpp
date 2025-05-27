@@ -77,6 +77,7 @@ void setup()
 
   WiFi.begin(ssid, password);
   WiFi.setSleep(false);
+  WiFi.setTxPower(WIFI_POWER_19_5dBm); // 设置 WiFi 发射功率最大
 
   Serial.print("WiFi connecting");
   while (WiFi.status() != WL_CONNECTED)
@@ -102,17 +103,17 @@ unsigned long lastCaptureTime = 0;
 
 void loop()
 {
-  camServer.update(); // 必须每次都调用
+  // camServer.update(); // 必须每次都调用
 
-  unsigned long now = millis();
-  if (now - lastCaptureTime > 50)
-  { // 控制 10 帧
+  // unsigned long now = millis();
+  // if (now - lastCaptureTime > 100)
+  // { // 控制 10 帧
     fb = esp_camera_fb_get();
     if (fb)
     {
       camServer.broadcastImg(fb->buf, fb->len);
       esp_camera_fb_return(fb);
     }
-    lastCaptureTime = now;
-  }
+    // lastCaptureTime = now;
+  // }
 }

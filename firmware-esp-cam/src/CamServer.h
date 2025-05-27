@@ -1,17 +1,17 @@
 #pragma once
 #include <Arduino.h>
+#include <lwip/sockets.h>
 #include <ESPAsyncWebServer.h>
-#include <cstdint>
-#include <cstddef>
 
 class CamServer
 {
 private:
     AsyncWebServer *server;
+    u32_t udpServerIP = inet_addr("192.168.10.101");
+    u16_t udpServerPort = 8099;
     std::vector<AsyncWebServerRequest *> streamClients;
     void handleMjpegStream(AsyncWebServerRequest *request);
-    void setupWebServer();
-
+    void setupConnection();
 public:
     void init();
     void update();
