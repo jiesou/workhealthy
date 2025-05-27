@@ -1,8 +1,8 @@
 #include "CamServer.h"
 #include "Httper.h"
-#include <AsyncWebSocket.h>
+#include <AsyncUDP.h>
 
-AsyncWebSocket ws("/ws");
+AsyncUDP udp;
 
 void CamServer::init()
 {
@@ -23,20 +23,31 @@ void CamServer::broadcastImg(uint8_t *img_buf, size_t img_len)
 {
     unsigned long current_time = millis();
 
-    if (!ws.count() > 0)
-        return;
-    // 清理断开的客户端
-    ws.cleanupClients();
+    const size_t max_packet_size = 1024;
+    uint16_t total_packets = img_len / max_packet_size + (img_len % max_packet_size != 0);
+    static uint16_t frame_id = 0;
 
-    // 检查所有客户端的队列状态，先检查再发送
-    if (!ws.availableForWriteAll())
+    for (uint16_t i = 0; i < total_packets; i++)
     {
-        Serial.println("[CamServer] Some WebSocket queues are full, skipping frame.");
-        ws.closeAll(1000, "Queue full");
-        return;
+        size_t start = i * max_packet_size;
+        size_t end = min(start + max_packet_size, img_len);
+        size_t chunk_size = end - start;
+
+        // 包头：2字节帧号 + 2字节包号 + 2字节总包数
+        uint8_t buf[6 + max_packet_size];
+        buf[0] = frame_id >> 8;
+        buf[1] = frame_id & 0xFF;
+        buf[2] = i >> 8;
+        buf[3] = i & 0xFF;
+        buf[4] = total_packets >> 8;
+        buf[5] = total_packets & 0xFF;
+        memcpy(buf + 6, img_buf + start, chunk_size);
+        
+        udp.writeTo(buf, 6 + chunk_size, IPAddress(192, 168, 10, 101), 8099);
+        delay(1); // 控制速率
     }
 
-    ws.binaryAll(img_buf, img_len);
+    frame_id++;
 
     // 统计帧率和传输量
     frame_count++;
@@ -51,38 +62,12 @@ void CamServer::broadcastImg(uint8_t *img_buf, size_t img_len)
     last_frame_time = current_time;
 
     // 输出当前帧信息
-    Serial.printf("[CamServer] Frame #%lu: %zu bytes, interval: %lu ms, clients: %d\n",
-                  frame_count, img_len, frame_interval, ws.count());
+    Serial.printf("[CamServer] Frame #%lu: %zu bytes, interval: %lu ms\n",
+                  frame_count, img_len, frame_interval);
 }
 
 void CamServer::setupWebServer()
 {
-    ws.onEvent([this](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
-               {
-        if (type == WS_EVT_CONNECT) {
-            Serial.printf("[CamServer] WebSocket client #%u connected\n", client->id());
-        } else if (type == WS_EVT_DISCONNECT) {
-            Serial.printf("[CamServer] WebSocket client #%u disconnected\n", client->id());
-        } });
-    server->addHandler(&ws);
-
-    server->on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-               { request->send(200, "text/html",
-                               "<html><body>"
-                               "<h2>ESP32-CAM Stream</h2>"
-                               "<img id='wsStream' style='width:480px'>"
-                               "<script>"
-                               "const ws = new WebSocket('ws://' + location.host + '/ws');"
-                               "ws.binaryType = 'arraybuffer';"
-                               "ws.onmessage = function(event) {"
-                               "  const img = document.getElementById('wsStream');"
-                               "  const blob = new Blob([event.data], {type: 'image/jpeg'});"
-                               "  img.src = URL.createObjectURL(blob);"
-                               "};"
-                               "</script>"
-                               "</body></html>"); });
-
-    server->begin(); // 启动服务器
     Serial.println("AsyncWebServer started.");
 }
 

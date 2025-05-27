@@ -48,7 +48,7 @@ void setup()
   config.pixel_format = PIXFORMAT_JPEG; // 直接传给后端 MJPEG
   config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 40;
+  config.jpeg_quality = 33;
 
   // 确认 PSRAM 可用
   if (psramFound())
@@ -105,7 +105,7 @@ void loop()
   camServer.update(); // 必须每次都调用
 
   unsigned long now = millis();
-  if (now - lastCaptureTime > 100)
+  if (now - lastCaptureTime > 50)
   { // 控制 10 帧
     fb = esp_camera_fb_get();
     if (fb)
