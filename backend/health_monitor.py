@@ -194,10 +194,6 @@ class HealthMonitor:
         
         return status
     
-    def get_latest_frame(self):
-        """获取最新的视频帧"""
-        return self.video_processor.get_latest_frame()
-    
     def set_yolo_processing(self, enable):
         """设置是否启用YOLO处理"""
         return self.video_processor.set_yolo_processing(enable) 

@@ -1,51 +1,93 @@
 import asyncio
-from socket import timeout
 import time
 import websockets
 import cv2
 import numpy as np
 import threading
 import os
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from abc import ABC, abstractmethod
+import queue
 
 
-class CameraCapture:
+class BaseCameraCapture(ABC):
+    """摄像头捕获基类，定义统一接口"""
+    
+    def __init__(self):
+        self.latest_frame: np.ndarray | None = None  # (height, width, 3), BGR格式
+        self.latest_frame_time = None
+        self.is_running = False
+        self.connected = False
+        self.frame_lock = threading.Lock()
+    
+    @abstractmethod
+    def start(self, video_url):
+        """启动摄像头捕获"""
+        pass
+    
+    @abstractmethod
+    def stop(self):
+        """停止摄像头捕获"""
+        pass
+    
+    def get_latest_frame(self) -> tuple[np.ndarray | None, float | None]:
+        """获取最新帧（线程安全）"""
+        with self.frame_lock:
+            if self.latest_frame is not None:
+                return self.latest_frame.copy(), self.latest_frame_time
+            return None, None
+    
+    def is_connected(self):
+        """检查是否连接"""
+        return self.is_running and self.connected
+    
+    def _update_frame(self, frame):
+        """更新最新帧（内部方法，线程安全）"""
+        with self.frame_lock:
+            self.latest_frame = frame
+            self.latest_frame_time = time.time()
+
+
+class WebSocketCameraCapture(BaseCameraCapture):
     """
-    WebSocket 视频客户端，替代 cv2.VideoCapture，兼容其接口。
-    得到 ESP32-CAM 通过 WebSocket 发送的二进制 JPEG 数据
+    WebSocket 视频客户端，从ESP32-CAM通过WebSocket接收JPEG数据
     """
 
     def __init__(self):
-        self.latest_frame = None
-        self.is_running = False
-        self.frame_lock = threading.Lock()  # 保护最新帧边界完整，必须使用锁
-        self.connected = False
+        super().__init__()
+        self.cam_ws_url = None
+        self.websocket = None
+        self.thread = None
 
     async def _connect_and_receive(self):
         """连接 WebSocket 并接收视频帧"""
         while self.is_running:
             try:
-                print(f"[CameraCapture] 尝试连接ESP32-CAM: {self.cam_ws_url}")
-                async with websockets.connect(self.cam_ws_url, ping_timeout=1) as websocket:
-                    print("[CameraCapture] 已连接到ESP32-CAM")
+                print(f"[WebSocketCamera] 尝试连接ESP32-CAM: {self.cam_ws_url}")
+                async with websockets.connect(self.cam_ws_url, ping_timeout=0.3) as websocket:
+                    print("[WebSocketCamera] 已连接到ESP32-CAM")
                     self.connected = True
 
                     async for message in websocket:
                         if not self.is_running:
                             break
-
-                        assert (isinstance(message, bytes)
-                                ), "CameraCapture 接收到非字节消息"
-                        # ESP32-CAM发送的是二进制JPEG数据
-                        frame = self._parse_frame(message)
-                        with self.frame_lock:
-                            print(f"[CameraCapture] 接收到新帧: {frame.shape if frame is not None else 'None'}")
-                            self.latest_frame = frame
-
-            except Exception as e:
-                print(f"[CameraCapture] ESP32-CAM连接错误: {e}")
+                        
+                        if isinstance(message, bytes):
+                            frame = self._parse_frame(message)
+                            if frame is not None:
+                                self._update_frame(frame)
+                                print("[WebSocketCamera] 接收到新帧")
+                        else:
+                            print("[WebSocketCamera] 接收到非字节消息")
+                            
+            except websockets.exceptions.ConnectionClosed:
+                print("[WebSocketCamera] WebSocket连接已关闭，尝试重新连接...")
                 self.connected = False
-                if self.is_running:
-                    await asyncio.sleep(1)  # 等待后重试
+            except Exception as e:
+                print(f"[WebSocketCamera] 连接出错: {e}")
+                self.connected = False
+                await asyncio.sleep(1)
 
     def _parse_frame(self, message):
         """解析接收到的帧数据 - 直接解码 JPEG 字节"""
@@ -55,44 +97,117 @@ class CameraCapture:
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             return frame
         except Exception as e:
-            print(f"[CameraCapture] 解析帧数据失败: {e}")
+            print(f"[WebSocketCamera] 解析帧数据失败: {e}")
             return None
-
-    """
-    1. 为什么不直接 asyncio？
-    cv2.VideoCapture 不是 async 的，如果整个 CameraCapture 写成 async 的，其他代码改动会很大。
-
-    2. 那为什么不直接 threading？
-    websockets 客户端库是 async 的。
-    """
 
     def start(self, video_url):
         """启动 WebSocket 客户端，在线程中运行异步事件循环"""
         self.cam_ws_url = video_url
         if not self.is_running:
             self.is_running = True
+            self.connected = False
             self.thread = threading.Thread(
                 target=lambda: asyncio.run(self._connect_and_receive()), daemon=True)
             self.thread.start()
 
-    def release(self):
+    def stop(self):
+        """停止WebSocket连接"""
         self.is_running = False
         self.connected = False
-        if hasattr(self, 'thread'):
-            self.thread.join()
+        if hasattr(self, 'thread') and self.thread:
+            self.thread.join(timeout=5)
 
-    def read(self):
-        with self.frame_lock:
-            if self.latest_frame is not None:
-                return True, self.latest_frame.copy()
-            return False, None
 
-    def isOpened(self):
-        return self.is_running and self.connected
+class CV2CameraCapture(BaseCameraCapture):
+    """
+    OpenCV 摄像头捕获，用于本地摄像头或HTTP视频流
+    """
+    
+    def __init__(self):
+        super().__init__()
+        # 设置OpenCV的错误处理
+        # OpenCV 4.0+ 才有 setLogLevel，低版本没有
+        try:
+            cv2.setLogLevel(cv2.LOG_LEVEL_SILENT)
+        except Exception as e:
+            print("[DEBUG] OpenCV setLogLevel not available or failed:", e)
+        self.cap = None
+        self.thread = None
+        self.video_url = None
+    
+    def _capture_loop(self):
+        """摄像头捕获主循环"""
+        failure_count = 0
+        max_failures = 10
+        
+        while self.is_running:
+            try:
+                # 创建VideoCapture对象
+                if self.cap is None:
+                    print(f"[CV2Camera] 尝试打开摄像头: {self.video_url}")
+                    self.cap = cv2.VideoCapture(self.video_url)
+                    
+                    # 设置缓冲区大小和超时
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+                    self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
+                    
+                    if not self.cap.isOpened():
+                        raise ValueError("[CV2Camera] 无法打开摄像头")
+                    
+                    print("[CV2Camera] 摄像头已连接")
+                    self.connected = True
+                    failure_count = 0
+                
+                # 读取帧
+                ret, frame = self.cap.read()
+                if ret and frame is not None:
+                    self._update_frame(frame)
+                    time.sleep(0.033)  # 约30fps
+                else:
+                    raise ValueError("[CV2Camera] 读取帧失败")
+                    
+            except Exception as e:
+                print(f"[CV2Camera] 捕获帧出错: {e}")
+                self.connected = False
+                failure_count += 1
+                
+                # 清理并重试
+                if self.cap:
+                    self.cap.release()
+                    self.cap = None
+                
+                if failure_count >= max_failures:
+                    print(f"[CV2Camera] 连续失败{max_failures}次，停止重试")
+                    break
+                
+                time.sleep(min(failure_count * 0.5, 5))  # 指数退避
+    
+    def start(self, video_url):
+        """启动摄像头捕获"""
+        self.video_url = video_url
+        if not self.is_running:
+            self.is_running = True
+            self.connected = False
+            self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+            self.thread.start()
+    
+    def stop(self):
+        """停止摄像头捕获"""
+        self.is_running = False
+        self.connected = False
+        
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+            
+        if hasattr(self, 'thread') and self.thread:
+            self.thread.join(timeout=5)
 
-    def set(self, prop, value):
-        """兼容 cv2.VideoCapture.set() 接口，但对 WebSocket 无效，直接 pass"""
-        pass
 
-# 单例，因为 VideoProcessor 里的错误处理会重新创建 cap
-cameraCapture = CameraCapture()
+def create_camera_capture(video_url) -> BaseCameraCapture:
+    """工厂函数：根据URL创建合适的摄像头捕获实例"""
+    if video_url.startswith("ws://") or video_url.startswith("wss://"):
+        return WebSocketCameraCapture()
+    else:
+        return CV2CameraCapture()

@@ -7,8 +7,9 @@ from io import BytesIO
 from PIL import Image
 import os
 import threading
-# 导入摄像头捕获单例
-from backend.camera_capture import cameraCapture
+import traceback
+# 导入摄像头捕获
+from backend.camera_capture import create_camera_capture
 
 # 在导入YOLO之前设置torch.load配置
 try:
@@ -43,6 +44,9 @@ class VideoProcessor:
         self.video_url = video_url
         self.last_frame = None
         self.last_frame_time = None
+        # 创建摄像头实例
+        self.camera = create_camera_capture(video_url)
+        
         self.is_running = False
         self.thread = None
         self.frame_buffer = []
@@ -58,8 +62,6 @@ class VideoProcessor:
         # 添加帧处理标志，控制是否进行YOLO分析
         self.enable_yolo_processing = True
         
-        # 帧率控制
-        self.frame_interval = 0.1  # 每帧之间的最小时间间隔（秒）
         self.last_process_time = time.time()
         # 新增：YOLO检测频率控制
         self.yolo_interval = 0.2  # YOLO检测最小间隔（秒）
@@ -115,6 +117,7 @@ class VideoProcessor:
         """启动视频处理线程"""
         if not self.is_running:
             self.is_running = True
+            # 启动处理线程
             self.thread = threading.Thread(target=self._process_video_stream)
             self.thread.daemon = True
             self.thread.start()
@@ -122,132 +125,90 @@ class VideoProcessor:
     def stop(self):
         """停止视频处理线程"""
         self.is_running = False
+        # 停止摄像头
+        self.camera.stop()
         if self.thread:
             self.thread.join()
     
     def _process_video_stream(self):
         """处理视频流的主循环"""
-        # 设置OpenCV的错误处理
-        # OpenCV 4.0+ 才有 setLogLevel，低版本没有
-        try:
-            cv2.setLogLevel(cv2.LOG_LEVEL_SILENT)
-        except Exception as e:
-            print("[DEBUG] OpenCV setLogLevel not available or failed:", e)
-        
-        # 创建备用图像（暂无作用）
-        backup_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(backup_frame, "视频流不可用", (180, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        
-        # 连续失败计数
-        failure_count = 0
-        max_failures = 10
-        retry_interval = 2  # 增加重试间隔
-        
+        # 处理频率控制：每秒5次处理
+        processing_interval = 1.0 / 5
+        last_processing_time = 0
+
+        # 启动摄像头（只启动一次）
+        self.camera.start(self.video_url)
+        print(f"[VideoProcessor] 启动摄像头: {self.camera}")
+
         while self.is_running:
-            try:
-                cap = None
-                # 尝试打开视频流
-                if self.video_url.startswith("ws://"):
-                    cameraCapture.start(self.video_url)
-                    cap = cameraCapture
-                else:
-                    cap = cv2.VideoCapture(self.video_url)
-                
-                print(f"[DEBUG] 尝试打开视频流: {cap}")
-                
-                # 设置缓冲区大小
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                
-                # 设置超时
-                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
-                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
-                
-                # if not cap.isOpened():
-                #     raise ValueError("无法打开视频流")
-                
-                while self.is_running:
+            current_time = time.time()
 
-                    frame_timing = {}
-                    frame_timing['frame_id'] = self.frame_id
-                    frame_start_time = time.time()
+            if current_time - last_processing_time < processing_interval:
+                time.sleep(0.01)  # 短暂休眠，避免CPU占用过高
+                continue
 
-                    # 帧率控制：检查是否到了处理下一帧的时间
-                    if frame_start_time - self.last_process_time < self.frame_interval:
-                        # 等待剩余时间
-                        remaining_time = self.frame_interval - \
-                            (frame_start_time - self.last_process_time)
-                        time.sleep(remaining_time)
-                    self.last_process_time = time.time()
+            frame, latest_frame_time = self.camera.get_latest_frame()
+            if frame is None:
+                # 没有帧可用，继续等待
+                time.sleep(0.1)
+                continue
 
+            frame_age = current_time - latest_frame_time if latest_frame_time else float('inf')
+            if frame_age > 1.0:
+                # 检查帧是否太旧（超过1秒的帧丢弃）
+                continue
 
-                    # 采集帧开始
-                    fetch_start = time.time()
-                    ret, frame = cap.read()
-                    fetch_end = time.time()
-                    frame_timing['fetch'] = int((fetch_end - fetch_start) * 1000)
-                    if not ret:
-                        raise ValueError("读取视频帧失败")
-                    
-                    print(f"[DEBUG] 读取帧 {frame.shape} 成功，时间: {frame_timing['fetch']}ms")
+            # 开始处理这一帧
+            processing_start_time = current_time
+            last_processing_time = current_time
 
-                    # 1. 存入帧缓冲区，并更新最新帧和时间戳
-                    with self.frame_lock:
-                        self.last_frame = frame
-                        self.display_frame = frame
-                        self.last_frame_time = datetime.now()
-                        self.frame_buffer.append(frame)
-                        if len(self.frame_buffer) > self.max_buffer_size:
-                            self.frame_buffer.pop(0)
+            frame_timing = {
+                'frame_id': self.frame_id,
+                'frame_age': int(frame_age * 1000),  # 帧的年龄（毫秒）
+            }
 
-                    # 2. 判断是否需要做YOLO检测
-                    now = time.time()
-                    do_yolo = False
-                    if now - self.last_yolo_time >= self.yolo_interval:
-                        do_yolo = True
-                        self.last_yolo_time = now
+            # 1. 更新帧缓冲区
+            with self.frame_lock:
+                self.last_frame = frame
+                self.display_frame = frame
+                self.last_frame_time = latest_frame_time
+                self.frame_buffer.append(frame)
+                if len(self.frame_buffer) > self.max_buffer_size:
+                    self.frame_buffer.pop(0)
 
-                    # 3. 分析帧（只在需要时做YOLO）
+            # 2. 进行YOLO检测和活动检测
+            person_detected_raw = None
+            if self.enable_yolo_processing:
+                try:
                     yolo_start = time.time()
-                    person_detected_raw = None
-                    if do_yolo and self.enable_yolo_processing:
-                        try:
-                            person_detected_raw = self._analyze_frame(frame, frame_timing)
-                        except Exception as e:
-                            import traceback
-                            print("[DEBUG] 分析帧时出错:", e)
-                            traceback.print_exc()
-                    else:
-                        # 只做活动检测
-                        self._detect_activity()
-                    yolo_end = time.time()
-                    frame_timing['yolo'] = int((yolo_end - yolo_start) * 1000) if do_yolo else 0
+                    person_detected_raw = self._analyze_frame(
+                        frame, frame_timing)
+                    frame_timing['yolo'] = int(
+                        (time.time() - yolo_start) * 1000)
+                except Exception as e:
+                    print(f"[VideoProcessor] YOLO分析出错: {e}")
+                    frame_timing['yolo'] = -1
+            else:
+                # 只做活动检测
+                activity_start = time.time()
+                self._detect_activity()
+                frame_timing['activity'] = int(
+                    (time.time() - activity_start) * 1000)
+                frame_timing['yolo'] = 0
 
-                    # 4. 日志记录（每帧都写）
-                    frame_end_time = time.time()
-                    frame_timing['total'] = int((frame_end_time - frame_start_time) * 1000)
-                    frame_timing['person_detected'] = self.person_detected
-                    frame_timing['person_detected_raw'] = person_detected_raw
-                    frame_timing['person_absence_start_time'] = str(self.person_absence_start_time) if self.person_absence_start_time else None
-                    frame_timing['last_person_detection_time'] = str(self.last_person_detection_time) if self.last_person_detection_time else None
-                    self._write_timing_log(frame_timing, detailed=True)
+            # 3. 记录处理时间和状态
+            processing_end_time = time.time()
+            frame_timing['total'] = int(
+                (processing_end_time - processing_start_time) * 1000)
+            frame_timing['person_detected'] = self.person_detected
+            frame_timing['person_detected_raw'] = person_detected_raw
+            frame_timing['is_active'] = self.is_active
+            frame_timing['cup_detected'] = self.cup_detected
 
-                    self.frame_id += 1
-            except Exception as e:
-                print(f"视频流处理出错: {e}")
-                # import traceback
-                # traceback.print_exc()
-                # failure_count += 1
-                # print(f"视频流错误 ({failure_count}/{max_failures}): {str(e)}")
-                
-                # # 指数退避重试
-                # if failure_count > max_failures:
-                #     retry_interval = min(retry_interval * 2, 30)
-                
-                time.sleep(0.5)
-                
-            finally:
-                if 'cap' in locals() and cap is not None:
-                    cap.release()
+            self._write_timing_log(frame_timing, detailed=True)
+
+            self.frame_id += 1
+
     
     def _analyze_frame(self, frame, frame_timing=None):
         """
@@ -281,15 +242,15 @@ class VideoProcessor:
         # 2. 更新人体检测状态
         if person_detected:
             self.person_detected = True
-            self.last_person_detection_time = datetime.now()
+            self.last_person_detection_time = time.time()
             self.person_absence_start_time = None
         else:
             if self.person_detected and not self.person_absence_start_time:
-                self.person_absence_start_time = datetime.now()
+                self.person_absence_start_time = time.time()
             if self.person_absence_start_time:
                 try:
-                    absence_duration = (datetime.now() - self.person_absence_start_time)
-                    if absence_duration.total_seconds() > 2:
+                    absence_duration = (time.time() - self.person_absence_start_time)
+                    if absence_duration > 2: # 2秒后认为人离开
                         self.person_detected = False
                 except Exception as e:
                     import traceback
@@ -298,11 +259,11 @@ class VideoProcessor:
         # 3. 更新水杯检测状态
         if cup_detected:
             self.cup_detected = True
-            self.last_cup_detection_time = datetime.now()
+            self.last_cup_detection_time = time.time()
         else:
             if self.last_cup_detection_time:
                 try:
-                    no_cup_duration = (datetime.now() - self.last_cup_detection_time)
+                    no_cup_duration = (time.time() - self.last_cup_detection_time)
                     if no_cup_duration.total_seconds() > 5:
                         self.cup_detected = False
                 except Exception as e:
@@ -339,12 +300,12 @@ class VideoProcessor:
         self._write_activity_log(self.frame_id, diff_ratio, self.is_active)
         if diff_ratio > self.activity_threshold:
             self.is_active = True
-            self.last_activity_time = datetime.now()
+            self.last_activity_time = time.time()
         else:
             if self.last_activity_time:
-                inactivity_duration = (datetime.now() - self.last_activity_time)
+                inactivity_duration = (time.time() - self.last_activity_time)
                 try:
-                    if inactivity_duration.total_seconds() > 10:
+                    if inactivity_duration > 10:
                         self.is_active = False
                 except Exception as e:
                     import traceback
@@ -375,10 +336,11 @@ class VideoProcessor:
             "last_cup_detection_time": self.last_cup_detection_time
         }
     
+
     def get_latest_frame(self):
         """获取最新的视频帧（用于前端显示）"""
-        with self.frame_lock:
-            return self.display_frame if self.display_frame is not None else self.last_frame
+        frame, _ = self.camera.get_latest_frame()
+        return frame
     
     def get_latest_frame_for_processing(self):
         """获取最新的视频帧（用于YOLO分析）"""
