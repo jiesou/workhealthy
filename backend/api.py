@@ -118,9 +118,8 @@ async def video_feed():
     """向前端提供 mjpeg 视频流"""
     async def generate():
         while True:
-            frame = health_monitor.get_latest_frame()
+            frame = health_monitor.video_processor.get_latest_frame()
             if frame is not None:
-                print(f"[video_feed] 生成新帧: {frame.shape}")
                 # 转换为JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
                 frame_bytes = jpeg.tobytes()
@@ -246,7 +245,7 @@ async def video_status():
     }
     
     # 检查是否有最新帧
-    frame = health_monitor.get_latest_frame()
+    frame = health_monitor.video_processor.get_latest_frame()
     if frame is not None:
         status["connected"] = True
         if health_monitor.video_processor.last_frame_time:
