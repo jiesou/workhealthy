@@ -48,7 +48,7 @@ void setup()
   config.pixel_format = PIXFORMAT_JPEG; // 直接传给后端 MJPEG
   config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 33;
+  config.jpeg_quality = 40;
 
   // 确认 PSRAM 可用
   if (psramFound())
@@ -77,7 +77,6 @@ void setup()
 
   WiFi.begin(ssid, password);
   WiFi.setSleep(false);
-  WiFi.setTxPower(WIFI_POWER_19_5dBm); // 设置 WiFi 发射功率最大
 
   Serial.print("WiFi connecting");
   while (WiFi.status() != WL_CONNECTED)
@@ -103,17 +102,17 @@ unsigned long lastCaptureTime = 0;
 
 void loop()
 {
-  // camServer.update(); // 必须每次都调用
+  camServer.update(); // 必须每次都调用
 
-  // unsigned long now = millis();
-  // if (now - lastCaptureTime > 100)
-  // { // 控制 10 帧
+  unsigned long now = millis();
+  if (now - lastCaptureTime > 100)
+  { // 控制 10 帧
     fb = esp_camera_fb_get();
     if (fb)
     {
       camServer.broadcastImg(fb->buf, fb->len);
       esp_camera_fb_return(fb);
     }
-    // lastCaptureTime = now;
-  // }
+    lastCaptureTime = now;
+  }
 }
