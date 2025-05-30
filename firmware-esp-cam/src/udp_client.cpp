@@ -1,24 +1,18 @@
 #include "udp_client.h"
-#include <string.h>
-#include <netinet/in.h>
+#include <Arduino.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <errno.h>
-#include <fcntl.h>
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 #define CHUNK_LENGTH 1472
-#define UDP_SERVER_IP "192.168.10.101" // 修改为你的服务器IP
-#define UDP_SERVER_PORT 8099           // 修改为你的服务器端口
+#define UDP_SERVER_IP "192.168.10.101"
+#define UDP_SERVER_PORT 8099
 
 static const char *TAG = "UDP_CLIENT";
 static int udp_socket = -1;
-static struct sockaddr_in server_addr;
-static unsigned long frame_count = 0;
-static uint8_t send_buffer[CHUNK_LENGTH]; // 将缓冲区改为静态变量
+static struct sockaddr_in udp_server_addr;
+static uint8_t send_buffer[CHUNK_LENGTH];
 
 static int send_with_retry(int sockfd, const void *buf, size_t len, int flags,
                            const struct sockaddr *dest_addr, socklen_t addrlen)
@@ -56,13 +50,13 @@ static esp_err_t setup_connection(void)
     }
 
     // 设置服务器地址
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(UDP_SERVER_PORT);
-    inet_pton(AF_INET, UDP_SERVER_IP, &server_addr.sin_addr);
+    udp_server_addr.sin_family = AF_INET;
+    udp_server_addr.sin_port = htons(UDP_SERVER_PORT);
+    inet_pton(AF_INET, UDP_SERVER_IP, &udp_server_addr.sin_addr);
 
     // 设置为阻塞模式
-    int flags = fcntl(udp_socket, F_GETFL, 0);
-    fcntl(udp_socket, F_SETFL, flags & ~O_NONBLOCK);
+    // int flags = fcntl(udp_socket, F_GETFL, 0);
+    // fcntl(udp_socket, F_SETFL, flags & ~O_NONBLOCK);
 
     ESP_LOGI(TAG, "UDP Socket started, server: %s:%d", UDP_SERVER_IP, UDP_SERVER_PORT);
     return ESP_OK;
@@ -77,7 +71,15 @@ void udp_client_init(void)
     }
 }
 
-esp_err_t udp_client_push_img(const uint8_t *data, size_t len)
+// 包头结构体
+typedef struct
+{
+    uint32_t frame_index;
+    uint16_t chunk_index;
+    uint16_t chunk_total;
+} __attribute__((packed)) udp_img_header_t;
+
+esp_err_t udp_client_push_img(const uint8_t *data, size_t data_len)
 {
     if (udp_socket < 0)
     {
@@ -85,51 +87,46 @@ esp_err_t udp_client_push_img(const uint8_t *data, size_t len)
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (data == NULL || len == 0)
+    if (data == NULL || data_len == 0)
     {
         ESP_LOGE(TAG, "Invalid data or length");
         return ESP_ERR_INVALID_ARG;
     }
 
-    static uint32_t start_frame_time = 0;
-    size_t buffer_len = sizeof(send_buffer);
-    size_t rest = len % buffer_len;
+    static uint32_t frame_index = 0;
+    // 计算单个分片能承载的长度
+    size_t chunk_payload_len = CHUNK_LENGTH - sizeof(udp_img_header_t);
+    // 计算总分片数，实现向上取整
+    uint16_t chunk_total = (data_len + chunk_payload_len - 1) / chunk_payload_len;
 
-    // 发送完整的块
-    for (size_t i = 0; i < len / buffer_len; ++i)
+    for (uint16_t chunk_index = 0; chunk_index < chunk_total; ++chunk_index)
     {
-        memcpy(send_buffer, data + (i * buffer_len), buffer_len);
-        int ret = send_with_retry(udp_socket, send_buffer, buffer_len, 0,
-                                  (struct sockaddr *)&server_addr, sizeof(server_addr));
+        size_t offset = chunk_index * chunk_payload_len;
+        // 当前分片如果是最后一片，则直接为当前剩余数据长度 (data_len - offset)
+        size_t this_len = (offset + chunk_payload_len > data_len) ? (data_len - offset) : chunk_payload_len;
+
+        // 组包
+        udp_img_header_t header = {
+            .frame_index = frame_index,
+            .chunk_index = chunk_index,
+            .chunk_total = chunk_total};
+        memcpy(send_buffer, &header, sizeof(header));
+        memcpy(send_buffer + sizeof(header), data + offset, this_len);
+
+        int ret = send_with_retry(
+            udp_socket,
+            send_buffer,
+            this_len + sizeof(header),
+            0,
+            (struct sockaddr *)&udp_server_addr,
+            sizeof(udp_server_addr));
         if (ret < 0)
         {
-            ESP_LOGE(TAG, "Failed to send chunk %zu", i);
+            ESP_LOGE(TAG, "Failed to send chunk %u", chunk_index);
             return ESP_FAIL;
         }
     }
 
-    // 发送剩余的不完整块
-    if (rest)
-    {
-        memcpy(send_buffer, data + (len - rest), rest);
-        int ret = send_with_retry(udp_socket, send_buffer, rest, 0,
-                                  (struct sockaddr *)&server_addr, sizeof(server_addr));
-        if (ret < 0)
-        {
-            ESP_LOGE(TAG, "Failed to send last chunk");
-            return ESP_FAIL;
-        }
-    }
-
-    // 统计信息
-    uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    frame_count++;
-    ESP_LOGI(TAG, "Frame #%lu: %zu bytes, interval: %lu ms",
-             frame_count, len, current_time - start_frame_time);
-    start_frame_time = current_time;
-
-    // 延时避免过快发送
-    vTaskDelay(pdMS_TO_TICKS(10));
-
+    frame_index++;
     return ESP_OK;
 }

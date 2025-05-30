@@ -1,21 +1,17 @@
 #include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
-#include "freertos/task.h"
-#include "esp_err.h"
-#include "esp_log.h"
 #include "original/include/usb_stream.h"
-#include "freertos/semphr.h"
+#include "esp_log.h"
 #include <WiFi.h>
 
 #include "udp_client.h"
 
 void camera_frame_cb(uvc_frame_t *frame, void *ptr)
 {
-  Serial.printf("Received frame: %dx%d, size: %zu bytes, sequence: %u\n",
+  Serial.printf("Updated frame: %dx%d, size: %zu bytes, sequence: %u\n",
                 frame->width, frame->height, frame->data_bytes, frame->sequence);
   // if (frame->frame_format == UVC_FRAME_FORMAT_MJPEG)
   // {
-    udp_client_push_img(static_cast<uint8_t*>(frame->data), frame->data_bytes);
+  udp_client_push_img(static_cast<uint8_t *>(frame->data), frame->data_bytes);
   // }
 }
 
@@ -29,13 +25,11 @@ void setup()
 
   // 配置 USB 摄像头
   uint8_t *xfer_buffer_a = (uint8_t *)malloc(60 * 1024); // 60KB
-
   uint8_t *xfer_buffer_b = (uint8_t *)malloc(60 * 1024); // 60KB
+  uint8_t *frame_buffer = (uint8_t *)malloc(60 * 1024);  // 60KB
 
-  uint8_t *frame_buffer = (uint8_t *)malloc(60 * 1024); // 60KB
-
-  uint16_t uvc_frame_w = 480;
-  uint16_t uvc_frame_h = 320;
+  uint16_t uvc_frame_w = 800;
+  uint16_t uvc_frame_h = 480;
 
   // 配置 UVC 参数
   uvc_config_t uvc_config = {

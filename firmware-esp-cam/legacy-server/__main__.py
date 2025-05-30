@@ -1,4 +1,6 @@
 import asyncio
+from calendar import c
+from matplotlib.pylab import f
 import uvicorn
 import socket
 from fastapi import FastAPI, Request
@@ -16,10 +18,8 @@ UDP_IP = "0.0.0.0"
 UDP_PORT = 8099
 MAX_PACKET_SIZE = 1472
 
-# 图像缓存优化
 latest_frame = None
-latest_frame_time = 0
-frame_lock = asyncio.Lock()
+last_frame_time = 0
 
 # 添加全局标志
 running = True
@@ -41,7 +41,7 @@ executor = ThreadPoolExecutor(max_workers=1)
 
 def udp_receiver():
     """在独立线程中运行UDP接收"""
-    global latest_frame, latest_frame_time, running
+    global latest_frame, last_frame_time, running
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
@@ -50,45 +50,39 @@ def udp_receiver():
     print(f"UDP server listening on {UDP_IP}:{UDP_PORT}")
 
     # 预分配缓冲区
-    byte_vector = bytearray(200000)  # 预分配足够大的空间
-    current_size = 0
-    CHUNK_LENGTH = 1023
-
+    frame_buffer = defaultdict(dict)  # frame_id -> {chunk_id: bytes}
+    frame_chunk_count = {}           # frame_id -> chunk_total
+    CHUNK_LENGTH = 1472
     while running:
         try:
             data, addr = sock.recvfrom(MAX_PACKET_SIZE)
 
-            # 检查是否是新的 JPEG 开始
-            if (len(data) == CHUNK_LENGTH and
-                len(data) >= 3 and
-                data[0] == 0xFF and
-                data[1] == 0xD8 and
-                    data[2] == 0xFF):
-                print("New JPEG frame detected")
-                current_size = 0
+            # 解析数据包头
+            frame_index = int.from_bytes(data[0:4], 'little')
+            chunk_index = int.from_bytes(data[4:6], 'little')
+            chunk_total = int.from_bytes(data[6:8], 'little')
+            chunk_payload = data[8:]
 
-            # 直接写入预分配的缓冲区
-            if current_size + len(data) < len(byte_vector):
-                byte_vector[current_size:current_size + len(data)] = data
-                current_size += len(data)
+            print(f"Frame {frame_index}, Chunk {chunk_index}/{chunk_total}, Payload size: {len(chunk_payload)} bytes")
 
-            # 检查是否是 JPEG 结束
-            if (len(data) != CHUNK_LENGTH and
-                len(data) >= 2 and
-                data[-2] == 0xFF and
-                    data[-1] == 0xD9):
+            # 存入缓存（可能乱序，所以直接放进 dict）
+            frame_buffer[frame_index][chunk_index] = chunk_payload
+            frame_chunk_count[frame_index] = chunk_total
 
-                # 复制完整帧数据
-                frame_time = time.time()
-                frame_data = bytes(byte_vector[:current_size])
-
-                # 原子更新
-                latest_frame = frame_data
-                latest_frame_time = frame_time
+            # 如果收齐了，立即组帧
+            if chunk_total - len(frame_buffer[frame_index]) <= 0:
+                chunks = [frame_buffer[frame_index][i]
+                          for i in range(chunk_total) if i in frame_buffer[frame_index]]
+                # 拼好帧
+                latest_frame = b"".join(chunks)
+                # 清理
+                del frame_buffer[frame_index]
+                del frame_chunk_count[frame_index]
 
                 print(
-                    f"JPEG frame complete, size: {current_size} bytes, time: {frame_time - latest_frame_time:.2f} seconds")
-                current_size = 0
+                    f"JPEG frame complete, size: {len(latest_frame)} bytes, time: {time.time() - last_frame_time:.2f} seconds")
+                last_frame_time = time.time()
+
 
         except socket.timeout:
             continue
@@ -112,28 +106,24 @@ async def start_udp_server():
 async def mjpeg_stream(request: Request):
     async def stream():
         boundary = "--frame"
-        last_frame_time = 0
 
         while True:
             if await request.is_disconnected():
                 break
 
-            # 检查是否有新帧
-            if latest_frame is None or latest_frame_time <= last_frame_time:
+            # 检查是否有帧
+            if latest_frame is None:
                 await asyncio.sleep(0.01)  # 减少检查间隔
                 continue
-
-            frame_data = latest_frame  # 获取当前帧
-            last_frame_time = latest_frame_time
 
             yield (
                 f"{boundary}\r\n"
                 f"Content-Type: image/jpeg\r\n"
-                f"Content-Length: {len(frame_data)}\r\n\r\n"
-            ).encode("utf-8") + frame_data + b"\r\n"
+                f"Content-Length: {len(latest_frame)}\r\n\r\n"
+            ).encode("utf-8") + latest_frame + b"\r\n"
 
-            # 控制帧率，目标20FPS
-            await asyncio.sleep(0.05)
+            # 控制帧率，目标30FPS
+            await asyncio.sleep(0.0333)
 
     return StreamingResponse(stream(), media_type="multipart/x-mixed-replace; boundary=frame")
 
