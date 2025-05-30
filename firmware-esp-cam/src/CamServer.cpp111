@@ -85,7 +85,7 @@ void CamServer::broadcastImg(uint8_t *img_buf, size_t img_len)
     Serial.printf("[CamServer] Frame #%lu: %zu bytes, interval: %lu ms\n",
         frame_count, img_len, current_time - start_frame_time);
     start_frame_time = current_time;
-    delay(10); // 延时 10ms，避免过快发送
+    // delay(10); // 延时 10ms，避免过快发送
 }
 
 CamServer camServer;

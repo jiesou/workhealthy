@@ -1,19 +1,23 @@
-#include "esp_camera.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "original/include/usb_stream.h"
+#include "freertos/semphr.h"
 #include <WiFi.h>
 
-#include "CamServer.h"
+#include "udp_client.h"
 
-//
-// WARNING!!! PSRAM IC required for UXGA resolution and high JPEG quality
-//            Ensure ESP32 Wrover Module or other board with PSRAM is selected
-//            Partial images will be transmitted if image exceeds buffer size
-//
-//            You must select partition scheme from the board menu that has at least 3MB APP space.
-//            Face Recognition is DISABLED for ESP32 and ESP32-S2, because it takes up from 15
-//            seconds to process single frame. Face Detection is ENABLED if PSRAM is enabled as well
-
-#define CAMERA_MODEL_AI_THINKER
-#include "camera_pins.h"
+void camera_frame_cb(uvc_frame_t *frame, void *ptr)
+{
+  Serial.printf("Received frame: %dx%d, size: %zu bytes, sequence: %u\n",
+                frame->width, frame->height, frame->data_bytes, frame->sequence);
+  // if (frame->frame_format == UVC_FRAME_FORMAT_MJPEG)
+  // {
+    udp_client_push_img(static_cast<uint8_t*>(frame->data), frame->data_bytes);
+  // }
+}
 
 const char *ssid = "CMCC-SDyb";
 const char *password = "2QiA74UZ";
@@ -22,62 +26,41 @@ void setup()
 {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
-  Serial.println();
 
-  camera_config_t config;
-  config.ledc_channel = LEDC_CHANNEL_0;
-  config.ledc_timer = LEDC_TIMER_0;
-  config.pin_d0 = Y2_GPIO_NUM;
-  config.pin_d1 = Y3_GPIO_NUM;
-  config.pin_d2 = Y4_GPIO_NUM;
-  config.pin_d3 = Y5_GPIO_NUM;
-  config.pin_d4 = Y6_GPIO_NUM;
-  config.pin_d5 = Y7_GPIO_NUM;
-  config.pin_d6 = Y8_GPIO_NUM;
-  config.pin_d7 = Y9_GPIO_NUM;
-  config.pin_xclk = XCLK_GPIO_NUM;
-  config.pin_pclk = PCLK_GPIO_NUM;
-  config.pin_vsync = VSYNC_GPIO_NUM;
-  config.pin_href = HREF_GPIO_NUM;
-  config.pin_sccb_sda = SIOD_GPIO_NUM;
-  config.pin_sccb_scl = SIOC_GPIO_NUM;
-  config.pin_pwdn = PWDN_GPIO_NUM;
-  config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 20000000;
-  config.frame_size = FRAMESIZE_QVGA;   // 分辨率
-  config.pixel_format = PIXFORMAT_JPEG; // 直接传给后端 MJPEG
-  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
-  config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 33;
+  // 配置 USB 摄像头
+  uint8_t *xfer_buffer_a = (uint8_t *)malloc(60 * 1024); // 60KB
 
-  // 确认 PSRAM 可用
-  if (psramFound())
-  {
-    Serial.println("PSRAM ok!");
-    config.jpeg_quality = 20;
-    config.fb_count = 3;
-    config.grab_mode = CAMERA_GRAB_LATEST;
-  }
+  uint8_t *xfer_buffer_b = (uint8_t *)malloc(60 * 1024); // 60KB
 
-  // camera init
-  esp_err_t err = esp_camera_init(&config);
-  if (err != ESP_OK)
-  {
-    Serial.printf("Camera init failed with error 0x%x", err);
-    return;
-  }
+  uint8_t *frame_buffer = (uint8_t *)malloc(60 * 1024); // 60KB
 
-  sensor_t *s = esp_camera_sensor_get();
-  // 适用于 OV2640
-  s->set_vflip(s, 0);      // 不反转垂直方向
-  s->set_brightness(s, 1); // 亮一点
-  s->set_saturation(s, 0); // 减少饱和度
-  s->set_awb_gain(s, 1);   // 启用自动白平衡增益
-  s->set_exposure_ctrl(s, 1); // 启用自动曝光
+  uint16_t uvc_frame_w = 480;
+  uint16_t uvc_frame_h = 320;
+
+  // 配置 UVC 参数
+  uvc_config_t uvc_config = {
+      .frame_width = uvc_frame_w,
+      .frame_height = uvc_frame_h,
+      .frame_interval = FRAME_INTERVAL_FPS_30,
+      .xfer_buffer_size = 60 * 1024, // 60KB
+      .xfer_buffer_a = xfer_buffer_a,
+      .xfer_buffer_b = xfer_buffer_b,
+      .frame_buffer_size = 60 * 1024, // 60KB
+      .frame_buffer = frame_buffer,
+      .frame_cb = &camera_frame_cb, // 核心回调函数
+      .frame_cb_arg = NULL,
+  };
+
+  // 配置 UVC 流
+  ESP_ERROR_CHECK(uvc_streaming_config(&uvc_config));
+
+  // 启动 USB 流处理
+  ESP_ERROR_CHECK(usb_streaming_start());
+
+  Serial.println("USB device connected!");
 
   WiFi.begin(ssid, password);
   WiFi.setSleep(false);
-  WiFi.setTxPower(WIFI_POWER_19_5dBm); // 设置 WiFi 发射功率最大
 
   Serial.print("WiFi connecting");
   while (WiFi.status() != WL_CONNECTED)
@@ -88,32 +71,15 @@ void setup()
   Serial.println("");
   Serial.println("WiFi connected");
 
-  // startCameraServer();
-
   Serial.print("Camera Ready! IP:");
   Serial.println(WiFi.localIP());
 
-  camServer.init();
+  udp_client_init();
+  esp_log_level_set("*", ESP_LOG_INFO);
 }
-
-camera_fb_t *fb = NULL;
-esp_err_t res = ESP_OK;
-
-unsigned long lastCaptureTime = 0;
 
 void loop()
 {
   // camServer.update(); // 必须每次都调用
-
-  // unsigned long now = millis();
-  // if (now - lastCaptureTime > 100)
-  // { // 控制 10 帧
-    fb = esp_camera_fb_get();
-    if (fb)
-    {
-      camServer.broadcastImg(fb->buf, fb->len);
-      esp_camera_fb_return(fb);
-    }
-    // lastCaptureTime = now;
-  // }
+  vTaskDelay(1000 / portTICK_PERIOD_MS); // 每秒更新一次
 }
