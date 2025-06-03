@@ -2,6 +2,7 @@
 #include <WiFi.h>
 
 #include "CamServer.h"
+#include "WSClient.h"
 
 //
 // WARNING!!! PSRAM IC required for UXGA resolution and high JPEG quality
@@ -94,6 +95,31 @@ void setup()
   Serial.println(WiFi.localIP());
 
   camServer.init();
+  wsclient.init();
+  pinMode(LED_GPIO_NUM, OUTPUT);
+  wsclient.onMessage([](const String &message) {
+    Serial.printf("Received message: %s\n", message.c_str());
+    // 这里可以处理接收到的消息
+    digitalWrite(LED_GPIO_NUM, message == "on" ? LOW : HIGH);
+  });
+  // 使用任务在另一个核心上异步更新 websocket
+  static TaskHandle_t wsTaskHandle = NULL;
+  if (wsTaskHandle == NULL) {
+    xTaskCreatePinnedToCore(
+      [](void *){
+        for (;;) {
+          wsclient.update();
+          vTaskDelay(10 / portTICK_PERIOD_MS); // 10ms 间隔
+        }
+      },
+      "wsclient_update_task",
+      4096,
+      NULL,
+      1,
+      &wsTaskHandle,
+      1 // 运行在 core 1
+    );
+  }
 }
 
 camera_fb_t *fb = NULL;
@@ -103,10 +129,8 @@ unsigned long lastCaptureTime = 0;
 
 void loop()
 {
-  // camServer.update(); // 必须每次都调用
-
   unsigned long now = millis();
-  if (now - lastCaptureTime > 50)
+  if (now - lastCaptureTime > 100)
   { // 控制 20 帧
     fb = esp_camera_fb_get();
     if (fb)
