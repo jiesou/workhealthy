@@ -1,5 +1,6 @@
 #include "esp_camera.h"
 #include <WiFi.h>
+#include "ArduinoJson.h"
 
 #include "CamServer.h"
 #include "WSClient.h"
@@ -100,8 +101,16 @@ void setup()
   wsclient.onMessage([](const String &message) {
     Serial.printf("Received message: %s\n", message.c_str());
     // 这里可以处理接收到的消息
-    digitalWrite(LED_GPIO_NUM, message == "on" ? LOW : HIGH);
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, message);
+    if (doc.containsKey("person_detected"))
+    {
+      digitalWrite(LED_GPIO_NUM, doc["person_detected"] == true ? HIGH : LOW);
+    } else {
+      digitalWrite(LED_GPIO_NUM, LOW); // 默认关闭 LED
+    }
   });
+
   // 使用任务在另一个核心上异步更新 websocket
   static TaskHandle_t wsTaskHandle = NULL;
   if (wsTaskHandle == NULL) {

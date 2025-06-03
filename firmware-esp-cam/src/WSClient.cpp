@@ -14,7 +14,6 @@ void WSClient::init() {
             ws.sendTXT("Hello from ESP32");
             break;
         case WStype_TEXT:
-            Serial.printf("Message received: %s\n", payload);
             if (onMessageCallback) {
                 onMessageCallback(String((char *)payload));
             }
