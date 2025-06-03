@@ -1,3 +1,4 @@
+from collections import defaultdict
 from . import BaseCameraCapture
 
 import socket
@@ -29,41 +30,54 @@ class UdpCameraCapture(BaseCameraCapture):
         print(
             f"[UdpCamera] UDP server listening on {self.udp_ip}:{self.udp_port}")
 
-        byte_vector = bytearray()
+        frame_buffer = defaultdict(dict)  # frame_id -> {chunk_id: bytes}
+        frame_chunk_count = {}            # frame_id -> chunk_total
         last_frame_time = time.time()
+        MAX_PACKET_SIZE = 1472
 
         while self.is_running:
             try:
-                data, addr = sock.recvfrom(self.chunk_length)
-                # 检查是否是新的 JPEG 开始 (FF D8 FF)
-                if (len(data) == self.chunk_length and
-                    len(data) >= 3 and
-                    data[0] == 0xFF and
-                    data[1] == 0xD8 and
-                        data[2] == 0xFF):
-                    byte_vector.clear()
+                data, addr = sock.recvfrom(MAX_PACKET_SIZE)
+                if len(data) < 8:
+                    continue  # 包头不足，丢弃
 
-                byte_vector.extend(data)
+                # 解析包头
+                frame_index = int.from_bytes(data[0:4], 'little')
+                chunk_index = int.from_bytes(data[4:6], 'little')
+                chunk_total = int.from_bytes(data[6:8], 'little')
+                chunk_payload = data[8:]
 
-                # 检查是否是 JPEG 结束 (FF D9)
-                if (len(data) != self.chunk_length and
-                    len(data) >= 2 and
-                    data[-2] == 0xFF and
-                        data[-1] == 0xD9):
+                # 存入缓存（可能乱序，所以直接放进 dict）
+                frame_buffer[frame_index][chunk_index] = chunk_payload
+                frame_chunk_count[frame_index] = chunk_total
 
+                # 如果收齐了，立即组帧
+                if chunk_total - len(frame_buffer[frame_index]) <= 0:
+                    try:
+                        chunks = [frame_buffer[frame_index][i]
+                                  for i in range(chunk_total)]
+                    except KeyError:
+                        # 有分片丢失，跳过
+                        del frame_buffer[frame_index]
+                        del frame_chunk_count[frame_index]
+                        continue
+
+                    latest_frame = b"".join(chunks)
                     # 解码JPEG为OpenCV帧
-                    nparr = np.frombuffer(bytes(byte_vector), np.uint8)
+                    nparr = np.frombuffer(latest_frame, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     if frame is not None:
                         self._update_frame(frame)
                         self.connected = True
                         print(
-                            f"[UdpCamera] 完整JPEG帧, 大小: {len(byte_vector)} bytes, 间隔: {time.time() - last_frame_time:.2f}s")
+                            f"[UdpCamera] 完整JPEG帧, 大小: {len(latest_frame)} bytes, 间隔: {time.time() - last_frame_time:.2f}s")
                         last_frame_time = time.time()
                     else:
                         print("[UdpCamera] JPEG解码失败")
 
-                    byte_vector.clear()
+                    # 清理缓存
+                    del frame_buffer[frame_index]
+                    del frame_chunk_count[frame_index]
 
             except BlockingIOError:
                 await asyncio.sleep(0.001)
@@ -79,7 +93,7 @@ class UdpCameraCapture(BaseCameraCapture):
         if video_url.startswith("udpserver://"):
             url = video_url[len("udpserver://"):]
         else:
-          raise ValueError("[UdpCamera] video_url 必须以'udpserver://'开头")
+            raise ValueError("[UdpCamera] video_url 必须以'udpserver://'开头")
         self.udp_ip, self.udp_port = url.split(':')
         self.udp_port = int(self.udp_port)
         """启动UDP监听线程"""

@@ -99,11 +99,11 @@ void setup()
   wsclient.init();
   pinMode(LED_GPIO_NUM, OUTPUT);
   wsclient.onMessage([](const String &message) {
-    Serial.printf("Received message: %s\n", message.c_str());
+    Serial.printf("[wsclient] Received message: %s\n", message.c_str());
     // 这里可以处理接收到的消息
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     deserializeJson(doc, message);
-    if (doc.containsKey("person_detected"))
+    if (doc["person_detected"].is<bool>())
     {
       digitalWrite(LED_GPIO_NUM, doc["person_detected"] == true ? HIGH : LOW);
     } else {
@@ -118,7 +118,7 @@ void setup()
       [](void *){
         for (;;) {
           wsclient.update();
-          vTaskDelay(10 / portTICK_PERIOD_MS); // 10ms 间隔
+          vTaskDelay(500 / portTICK_PERIOD_MS); // 500ms 间隔
         }
       },
       "wsclient_update_task",
@@ -139,7 +139,7 @@ unsigned long lastCaptureTime = 0;
 void loop()
 {
   unsigned long now = millis();
-  if (now - lastCaptureTime > 100)
+  if (now - lastCaptureTime > 50)
   { // 控制 20 帧
     fb = esp_camera_fb_get();
     if (fb)

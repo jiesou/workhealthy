@@ -1,10 +1,12 @@
-#include "WSClient.h"
-
+#include "wsclient.h"
 #define WS_SERVER_HOST "192.168.10.101"
 #define WS_SERVER_PORT 8000
 
-void WSClient::init() {
-    ws.onEvent([this](WStype_t type, uint8_t *payload, size_t length) {
+WebSocketsClient ws;
+void (*onMessageCallback)(const String &message) = nullptr;
+
+void wsclient_init() {
+    ws.onEvent([](WStype_t type, uint8_t *payload, size_t length) {
         switch (type) {
         case WStype_DISCONNECTED:
             Serial.println("[WSClient] Disconnected");
@@ -30,14 +32,12 @@ void WSClient::init() {
     });
     ws.begin(WS_SERVER_HOST, WS_SERVER_PORT, "/ws");
 }
-void WSClient::update() {
+void wsclient_update() {
     ws.loop();
 }
-void WSClient::sendMessage(String &message) {
+void wsclient_send_message(String &message) {
     ws.sendTXT(message);
 }
-void WSClient::onMessage(void (*callback)(const String &message)) {
+void wsclient_on_message(void (*callback)(const String &message)) {
     onMessageCallback = callback;
 }
-
-WSClient wsclient;

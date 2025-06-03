@@ -1,4 +1,3 @@
-
 #pragma once
 #include "freertos/FreeRTOS.h"
 #include "esp_err.h"

@@ -214,6 +214,7 @@ async def push_status_updates():
         try:
             if connected_clients:
                 status = health_monitor.get_status()
+                print(f"推送状态更新: {status}")
 
                 # 转换datetime对象为字符串
                 for key, value in status.items():
