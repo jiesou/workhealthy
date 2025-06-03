@@ -6,6 +6,7 @@
 
 #include "udp_client.h"
 #include "wsclient.h"
+#include "interactive.h"
 
 #define LED_GPIO_NUM 4
 #define FRAME_MEM_SIZE 60 * 1024 // 每个帧缓冲区大小 60KB
@@ -70,19 +71,16 @@ void setup()
 
   udp_client_init();
   wsclient_init();
+  interactive_init();
   pinMode(LED_GPIO_NUM, OUTPUT);
   wsclient_on_message([](const String &message)
                       {
     Serial.printf("[wsclient] Received message: %s\n", message.c_str());
     // 这里可以处理接收到的消息
     JsonDocument doc;
-    deserializeJson(doc, message);
-    if (doc["person_detected"].is<bool>())
-    {
-      digitalWrite(LED_GPIO_NUM, doc["person_detected"] == true ? HIGH : LOW);
-    } else {
-      digitalWrite(LED_GPIO_NUM, LOW); // 默认关闭 LED
-    } });
+    deserializeJson(doc, message); 
+    interactive_update(doc);
+  });
 
   // 核心分配策略：
   // Core 0: 系统任务 + UDP图传
@@ -104,8 +102,7 @@ void setup()
       NULL,
       1,
       &wsTaskHandle,
-      1
-  );
+      1);
 
   esp_log_level_set("*", ESP_LOG_INFO);
 }
