@@ -30,6 +30,7 @@ KNOWN_NAMES = []
 BEST_MODEL_PATH = "backend/best.pt"
 best_yolo_model = YOLO(BEST_MODEL_PATH)
 
+
 def load_facedata():
     """加载人脸库特征到内存，支持特征缓存"""
     if os.path.exists(ENCODINGS_PATH):
@@ -52,8 +53,10 @@ def load_facedata():
         pickle.dump((encodings, names), f)
     return encodings, names
 
+
 # 项目启动时加载一次人脸库
 KNOWN_ENCODINGS, KNOWN_NAMES = load_facedata()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,12 +64,12 @@ async def lifespan(app: FastAPI):
     # 启动时执行
     print("应用启动中...")
     health_monitor.start()
-    
+
     # 启动后台任务
     background_task = asyncio.create_task(push_status_updates())
-    
+
     yield  # 应用运行期间
-    
+
     # 关闭时执行
     print("应用关闭中...")
     background_task.cancel()
@@ -93,10 +96,12 @@ app.add_middleware(
 video_url = os.getenv("VIDEO_URL")
 health_monitor = HealthMonitor(video_url)
 
+
 @app.get("/")
 async def root():
     """API根路径"""
     return {"message": "工位健康监测系统API"}
+
 
 @app.get("/status")
 async def get_status():
@@ -106,12 +111,13 @@ async def get_status():
     for key, value in status.items():
         if isinstance(value, datetime):
             status[key] = value.isoformat()
-    
+
     if "health_metrics" in status and status["health_metrics"]:
         if "timestamp" in status["health_metrics"] and isinstance(status["health_metrics"]["timestamp"], datetime):
             status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat()
-    
+
     return status
+
 
 @app.get("/video_feed")
 async def video_feed():
@@ -123,19 +129,20 @@ async def video_feed():
                 # 转换为JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
                 frame_bytes = jpeg.tobytes()
-                
+
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            
+
             await asyncio.sleep(0.1)
-    
+
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+
 
 @app.get("/health_metrics")
 async def get_health_metrics(days: int = 7, db: Session = Depends(get_db)):
     """获取健康指标历史数据"""
     metrics = crud.get_health_metrics_history(db, days)
-    
+
     # 转换为JSON可序列化格式
     result = []
     for metric in metrics:
@@ -143,8 +150,9 @@ async def get_health_metrics(days: int = 7, db: Session = Depends(get_db)):
             "id": metric.id,
             "timestamp": metric.timestamp.isoformat(),
         })
-    
+
     return result
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -155,29 +163,29 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"WebSocket连接已接受: {websocket.client}")
         connected_clients.add(websocket)
         print(f"当前连接的客户端数量: {len(connected_clients)}")
-        
+
         # 立即发送一次当前状态
         status = health_monitor.get_status()
-        
+
         # 转换datetime对象为字符串
         for key, value in status.items():
             if isinstance(value, datetime):
                 status[key] = value.isoformat()
-        
+
         if "health_metrics" in status and status["health_metrics"]:
             if "timestamp" in status["health_metrics"] and isinstance(status["health_metrics"]["timestamp"], datetime):
                 status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat()
-        
+
         # 发送欢迎消息
         await websocket.send_json({
             "type": "welcome",
             "message": "WebSocket连接已建立",
             "timestamp": datetime.now().isoformat()
         })
-        
+
         # 发送当前状态
         await websocket.send_json(status)
-        
+
         while True:
             # 等待客户端消息（保持连接）
             try:
@@ -198,22 +206,25 @@ async def websocket_endpoint(websocket: WebSocket):
             connected_clients.remove(websocket)
 
 # 后台任务：定期向所有连接的客户端推送状态更新
+
+
 async def push_status_updates():
     """定期向所有WebSocket客户端推送状态更新"""
     while True:
         try:
             if connected_clients:
                 status = health_monitor.get_status()
-                
+
                 # 转换datetime对象为字符串
                 for key, value in status.items():
                     if isinstance(value, datetime):
                         status[key] = value.isoformat()
-                
+
                 if "health_metrics" in status and status["health_metrics"]:
                     if "timestamp" in status["health_metrics"] and isinstance(status["health_metrics"]["timestamp"], datetime):
-                        status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat()
-                
+                        status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat(
+                        )
+
                 # 向所有连接的客户端发送状态更新
                 disconnected_clients = set()
                 for client in connected_clients:
@@ -222,7 +233,7 @@ async def push_status_updates():
                     except Exception as e:
                         print(f"向客户端发送数据失败: {str(e)}")
                         disconnected_clients.add(client)
-                
+
                 # 移除断开连接的客户端
                 for client in disconnected_clients:
                     if client in connected_clients:
@@ -230,9 +241,10 @@ async def push_status_updates():
                         print(f"移除断开的客户端，当前连接数: {len(connected_clients)}")
         except Exception as e:
             print(f"推送状态更新时出错: {str(e)}")
-        
+
         # 每秒更新一次
         await asyncio.sleep(0.5)
+
 
 @app.get("/video_status")
 async def video_status():
@@ -243,7 +255,7 @@ async def video_status():
         "last_frame_time": None,
         "error": None
     }
-    
+
     # 检查是否有最新帧
     frame = health_monitor.video_processor.get_latest_frame()
     if frame is not None:
@@ -252,14 +264,15 @@ async def video_status():
             status["last_frame_time"] = health_monitor.video_processor.last_frame_time.isoformat()
     else:
         status["error"] = "未获取到视频帧"
-    
+
     # 输出到控制台
     if status["connected"]:
         print(f"视频流连接状态: 已连接 - {status['video_url']}")
     else:
         print(f"视频流连接状态: 未连接 - {status['video_url']} - 错误: {status['error']}")
-    
+
     return status
+
 
 @app.get("/toggle_yolo/{enable}")
 async def toggle_yolo(enable: bool):
@@ -272,6 +285,7 @@ async def toggle_yolo(enable: bool):
     except Exception as e:
         print(f"切换YOLO处理状态出错: {str(e)}")
         return {"status": "error", "message": str(e)}
+
 
 def detect_hat_with_yolo(image_path, yolo_model):
     """用YOLO模型检测图片中是否有安全帽（类别名为'hat'）"""
@@ -286,6 +300,7 @@ def detect_hat_with_yolo(image_path, yolo_model):
                 if yolo_model.names[cls_idx] == 'Hardhat':
                     return True
     return False
+
 
 @app.post("/face_signin")
 @app.post("/api/face_signin")
@@ -304,7 +319,8 @@ async def face_signin(image: UploadFile = File(...), db: Session = Depends(get_d
     # 2. 直接用内存中的人脸特征
     if not KNOWN_ENCODINGS:
         result = "人脸库为空，无法识别"
-        crud.create_signin_record(db, name=None, image_path=image_path, result=result)
+        crud.create_signin_record(
+            db, name=None, image_path=image_path, result=result)
         return {"success": False, "message": result}
 
     # 3. 识别上传图片
@@ -312,12 +328,14 @@ async def face_signin(image: UploadFile = File(...), db: Session = Depends(get_d
     unknown_encodings = face_recognition.face_encodings(unknown_img)
     if not unknown_encodings:
         result = "未检测到人脸"
-        crud.create_signin_record(db, name=None, image_path=image_path, result=result)
+        crud.create_signin_record(
+            db, name=None, image_path=image_path, result=result)
         return {"success": False, "message": result}
     unknown_encoding = unknown_encodings[0]
 
     # 计算所有已知人脸的距离
-    distances = face_recognition.face_distance(KNOWN_ENCODINGS, unknown_encoding)
+    distances = face_recognition.face_distance(
+        KNOWN_ENCODINGS, unknown_encoding)
     min_distance = float(distances.min())
     min_index = int(distances.argmin())
 
@@ -330,12 +348,15 @@ async def face_signin(image: UploadFile = File(...), db: Session = Depends(get_d
             has_hat = detect_hat_with_yolo(image_path, best_yolo_model)
             if not has_hat:
                 result = "签到失败，请携带安全设备上岗"
-                crud.create_signin_record(db, name=name, image_path=image_path, result=result)
+                crud.create_signin_record(
+                    db, name=name, image_path=image_path, result=result)
                 return {"success": False, "message": result, "name": name, "distance": min_distance}
         result = f"欢迎，{name}！签到成功"
-        crud.create_signin_record(db, name=name, image_path=image_path, result=result)
+        crud.create_signin_record(
+            db, name=name, image_path=image_path, result=result)
         return {"success": True, "message": result, "name": name, "distance": min_distance}
     else:
         result = "未识别到已注册人脸"
-        crud.create_signin_record(db, name=None, image_path=image_path, result=result)
-        return {"success": False, "message": result, "distance": min_distance} 
+        crud.create_signin_record(
+            db, name=None, image_path=image_path, result=result)
+        return {"success": False, "message": result, "distance": min_distance}
