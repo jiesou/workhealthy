@@ -4,6 +4,13 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
+#include <esp_display_panel.hpp>
+#include <lvgl.h>
+#include "lvgl_v8_port.h"
+
+using namespace esp_panel::drivers;
+using namespace esp_panel::board;
+
 #include "udp_client.h"
 #include "wsclient.h"
 #include "interactive.h"
@@ -26,6 +33,27 @@ void setup()
 {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
+
+  Serial.println("Initializing board");
+  Board *board = new Board();
+  board->init();
+  assert(board->begin());
+
+  Serial.println("Initializing LVGL");
+  lvgl_port_init(board->getLCD(), board->getTouch());
+
+  Serial.println("Creating UI");
+  /* Lock the mutex due to the LVGL APIs are not thread-safe */
+  lvgl_port_lock(-1);
+
+  lv_obj_t *label_2 = lv_label_create(lv_scr_act());
+  lv_label_set_text_fmt(
+      label_2, "ESP32_Display_Panel(%d.%d.%d)",
+      ESP_PANEL_VERSION_MAJOR, ESP_PANEL_VERSION_MINOR, ESP_PANEL_VERSION_PATCH);
+  lv_obj_set_style_text_font(label_2, &lv_font_montserrat_14, 0);
+  lv_obj_align(label_2, LV_ALIGN_CENTER, 0, -20);
+
+  lvgl_port_unlock();
 
   // 配置 USB 摄像头
   uint8_t *xfer_buffer_a = (uint8_t *)malloc(FRAME_MEM_SIZE); // 60KB
@@ -103,8 +131,6 @@ void setup()
       1,
       &wsTaskHandle,
       1);
-
-  esp_log_level_set("*", ESP_LOG_INFO);
 }
 
 void loop()
