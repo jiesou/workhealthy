@@ -86,10 +86,10 @@ void setup()
   });
 
   // 核心分配策略：
-  // Core 0: 系统任务 + UDP图传
-  // Core 1: wsclient 任务
+  // Core 1: 系统任务 + UDP图传
+  // Core 0: wsclient 任务
 
-  // wsclient 任务 - 固定在 Core 1
+  // wsclient 任务 - 固定在 Core 0
   static TaskHandle_t wsTaskHandle = NULL;
   xTaskCreatePinnedToCore(
       [](void *)
@@ -105,7 +105,7 @@ void setup()
       NULL,
       1,
       &wsTaskHandle,
-      1);
+      0);
 }
 
 void loop()

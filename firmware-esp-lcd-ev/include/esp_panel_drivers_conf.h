@@ -24,7 +24,7 @@
  * Enable or disable bus drivers used in the factory class. Disable to reduce code size.
  * Set to `1` to enable, `0` to disable.
  */
-#define ESP_PANEL_DRIVERS_BUS_USE_ALL (1)
+#define ESP_PANEL_DRIVERS_BUS_USE_ALL (0)
 #if !ESP_PANEL_DRIVERS_BUS_USE_ALL
 #define ESP_PANEL_DRIVERS_BUS_USE_SPI (0)
 #define ESP_PANEL_DRIVERS_BUS_USE_QSPI (0)
