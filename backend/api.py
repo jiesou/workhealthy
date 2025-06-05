@@ -18,7 +18,7 @@ from database import crud, get_db
 from .health_monitor import HealthMonitor
 
 # 存储所有连接的客户端
-connected_clients = set()
+connected_clients: set[WebSocket] = set()
 
 ENCODINGS_PATH = "backend/facedata_encodings.pkl"
 
@@ -214,6 +214,7 @@ async def push_status_updates():
         try:
             if connected_clients:
                 status = health_monitor.get_status()
+                status["timestamp"] = datetime.now().isoformat()
                 print(f"推送状态更新: {status}")
 
                 # 转换datetime对象为字符串

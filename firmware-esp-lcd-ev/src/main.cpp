@@ -81,7 +81,9 @@ void setup()
     Serial.printf("[wsclient] Received message: %s\n", message.c_str());
     // 这里可以处理接收到的消息
     JsonDocument doc;
-    deserializeJson(doc, message); 
+    deserializeJson(doc, message);
+    String timestamp = doc["timestamp"].as<String>();
+    wsclient_send_message(timestamp);
     interactive_update(doc);
   });
 
@@ -97,7 +99,7 @@ void setup()
         for (;;)
         {
           wsclient_update();
-          vTaskDelay(500 / portTICK_PERIOD_MS); // 500ms 刷新一次 wsclient
+          vTaskDelay(1 / portTICK_PERIOD_MS); // 1ms 刷新一次 wsclient
         }
       },
       "wsclient_task",

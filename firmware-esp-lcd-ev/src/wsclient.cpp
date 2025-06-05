@@ -1,4 +1,6 @@
 #include "wsclient.h"
+#include "lcd.h"
+
 #define WS_SERVER_HOST "192.168.10.101"
 #define WS_SERVER_PORT 8000
 
@@ -10,9 +12,11 @@ void wsclient_init() {
         switch (type) {
         case WStype_DISCONNECTED:
             Serial.println("[WSClient] Disconnected");
+            lcd_update_connect_status(false);
             break;
         case WStype_CONNECTED:
             Serial.println("[WSClient] Connected");
+            lcd_update_connect_status(true);
             break;
         case WStype_TEXT:
             if (onMessageCallback) {
@@ -35,8 +39,8 @@ void wsclient_init() {
 void wsclient_update() {
     ws.loop();
 }
-void wsclient_send_message(String &message) {
-    ws.sendTXT(message);
+void wsclient_send_message(const String &message) {
+    ws.sendTXT(message.c_str(), message.length());
 }
 void wsclient_on_message(void (*callback)(const String &message)) {
     onMessageCallback = callback;

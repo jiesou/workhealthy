@@ -10,7 +10,7 @@ Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 void interactive_init()
 {
     pixels.begin();
-    pixels.setBrightness(50);
+    pixels.setBrightness(10);
     pixels.setPixelColor(0, pixels.Color(255, 0, 0)); // 初始颜色为红色
     pixels.show();
 }
@@ -24,10 +24,12 @@ void interactive_update(JsonDocument &doc)
         {
             pixels.setBrightness(100);
             pixels.setPixelColor(0, pixels.Color(255, 255, millis() % 256)); // 颜色变化
+            lcd_update_person_detected(true);
         }
         else
         {
             pixels.setPixelColor(0, pixels.Color(0, 0, 0)); // 关闭 LED
+            lcd_update_person_detected(false);
         }
     }
     else

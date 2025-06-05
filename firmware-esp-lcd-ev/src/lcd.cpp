@@ -1,4 +1,6 @@
 #include "lcd.h"
+
+Board *board;
 typedef struct
 {
     lv_obj_t *card;
@@ -8,12 +10,57 @@ typedef struct
 
 static CardWidgets cup_detect_card;
 static CardWidgets work_time_card;
+static lv_obj_t *status_label;
+static lv_obj_t *brightness_mask = nullptr;
 
 /* 卡片的 style */
 lv_style_t card_style;
 /* 没有边框 container 的 style */
 lv_style_t container_style;
 
+void lcd_update_connect_status(const bool connected)
+{
+    if (status_label != NULL)
+    {
+        lvgl_port_lock(-1);
+        if (connected)
+        {
+            lv_label_set_text(status_label, LV_SYMBOL_OK " 已连接");
+            lv_obj_set_style_text_color(status_label, lv_color_hex(0x00FF00), 0);
+        }
+        else
+        {
+            lv_label_set_text(status_label, LV_SYMBOL_WIFI " 未连接");
+            lv_obj_set_style_text_color(status_label, lv_color_hex(0xFF0000), 0);
+        }
+
+        lvgl_port_unlock();
+    }
+}
+void lcd_update_person_detected(const bool person_detected)
+{
+    lvgl_port_lock(-1);
+    if (!person_detected)
+    {
+        lv_obj_set_style_bg_opa(brightness_mask, LV_OPA_60, 0); // 人离开，遮罩变成灰色
+    }
+    else
+    {
+        lv_obj_set_style_bg_opa(brightness_mask, LV_OPA_0, 0); // 人到来，遮罩变成透明
+    }
+    lvgl_port_unlock();
+}
+void lcd_update_cup_detect(const bool cup_detected)
+{
+    if (cup_detect_card.desc_label != NULL)
+    {
+        lvgl_port_lock(-1);
+        char buf[64];
+        snprintf(buf, sizeof(buf), "检测到 %s", cup_detected ? "杯子" : "无杯子");
+        lv_label_set_text(cup_detect_card.desc_label, buf);
+        lvgl_port_unlock();
+    }
+}
 void lcd_update_work_time(const char *text)
 {
     if (work_time_card.desc_label != NULL)
@@ -79,7 +126,7 @@ void _createUI()
     /* title bar */
     lv_obj_t *title_bar = lv_obj_create(scr);
     lv_obj_add_style(title_bar, &container_style, 0);
-    lv_obj_set_flex_flow(title_bar, LV_FLEX_FLOW_ROW); // 横向排列
+    lv_obj_set_flex_flow(title_bar, LV_FLEX_FLOW_ROW_WRAP); // 横向排列
     lv_obj_set_flex_align(title_bar, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER); // 分布到两端
     lv_obj_set_width(title_bar, LV_HOR_RES); // 宽度填满屏幕
     lv_obj_align(title_bar, LV_ALIGN_TOP_MID, 0, 0);
@@ -89,7 +136,7 @@ void _createUI()
         lv_obj_add_style(title_label, &card_style, 0);
         lv_obj_add_style(title_label, &container_style, 0);
         /* status */
-        lv_obj_t *status_label = lv_label_create(title_bar);
+        status_label = lv_label_create(title_bar);
         lv_label_set_text(status_label, LV_SYMBOL_WIFI " 未连接");
         lv_obj_set_style_text_font(status_label, &myfont_notosc_regular_16, 0);
 
@@ -106,6 +153,26 @@ void _createUI()
     cup_detect_card = _createCard(cards_container, "喝水检测", "检测到--，喝水时间--");
     work_time_card = _createCard(cards_container, "工作时间", "工作--");
 
+
+    brightness_mask = lv_obj_create(lv_scr_act()); // 创建遮罩对象在当前屏幕
+    lv_obj_remove_style_all(brightness_mask);      // 移除默认样式
+    
+    // 设置为不参与布局计算
+    lv_obj_clear_flag(brightness_mask, LV_OBJ_FLAG_CLICKABLE);   // 不可点击
+    lv_obj_add_flag(brightness_mask, LV_OBJ_FLAG_FLOATING);      // 浮动对象，不参与布局流
+    lv_obj_add_flag(brightness_mask, LV_OBJ_FLAG_OVERFLOW_VISIBLE); // 允许内容超出边界
+    
+    // 设置全屏大小 & 居中
+    lv_obj_set_size(brightness_mask, LV_HOR_RES, LV_VER_RES);
+    lv_obj_set_pos(brightness_mask, 0, 0);  // 从左上角开始
+    
+    // 设置黑色 + 初始透明
+    lv_obj_set_style_bg_color(brightness_mask, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(brightness_mask, LV_OPA_0, 0); // 初始全透明
+    
+    // 保证始终在最上面
+    lv_obj_move_foreground(brightness_mask);
+
     lvgl_port_unlock();
     // clang-format on
 }
@@ -113,7 +180,7 @@ void _createUI()
 void lcd_init()
 {
     ESP_LOGI(TAG, "Initializing board");
-    Board *board = new Board();
+    board = new Board();
     board->init();
     assert(board->begin());
 
