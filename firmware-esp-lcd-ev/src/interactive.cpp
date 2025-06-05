@@ -35,13 +35,15 @@ void interactive_update(JsonDocument &doc)
         pixels.setPixelColor(0, pixels.Color(255, 0, 0));
     }
 
-    if (doc["work_time"].is<int>())
+    if (doc["today_work_duration"].is<int>())
     {
-        lcd_update_work_time(doc["work_time"].as<String>().c_str());
+        char duration_str[32];
+        snprintf(duration_str, sizeof(duration_str), "%d", doc["today_work_duration"].as<int>());
+        lcd_update_work_time(duration_str);
     }
     else
     {
-        lcd_update_work_time("未知");
+        lcd_update_work_time("--");
     }
     pixels.show();
 }

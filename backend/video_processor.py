@@ -264,7 +264,7 @@ class VideoProcessor:
             if self.last_cup_detection_time:
                 try:
                     no_cup_duration = (time.time() - self.last_cup_detection_time)
-                    if no_cup_duration.total_seconds() > 5:
+                    if no_cup_duration > 5:  # 5秒后认为没有水杯
                         self.cup_detected = False
                 except Exception as e:
                     import traceback

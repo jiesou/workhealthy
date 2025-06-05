@@ -105,6 +105,14 @@ class HealthMonitor:
             except Exception as e:
                 print(f"监测过程中出错: {e}")
                 traceback.print_exc()
+            finally:
+                # 确保数据库连接被正确关闭
+                if db:
+                    try:
+                        db.close()
+                    except Exception as e:
+                        print(f"关闭数据库连接时出错: {e}")
+
             
             # 每秒检查一次
             time.sleep(1)
@@ -191,7 +199,13 @@ class HealthMonitor:
             status["today_work_duration"] = today_work_duration
         except Exception as e:
             print(f"获取健康指标或在岗时长时出错: {e}")
-        
+        finally:
+            if db:
+                try:
+                    db.close()
+                except Exception as e:
+                    print(f"关闭数据库连接时出错: {e}")
+
         return status
     
     def set_yolo_processing(self, enable):

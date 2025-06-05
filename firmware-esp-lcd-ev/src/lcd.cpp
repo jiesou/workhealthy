@@ -18,9 +18,11 @@ void lcd_update_work_time(const char *text)
 {
     if (work_time_card.desc_label != NULL)
     {
+        lvgl_port_lock(-1);
         char buf[64];
-        snprintf(buf, sizeof(buf), "工作时间%s", text);
+        snprintf(buf, sizeof(buf), "工作时间 %s 秒", text);
         lv_label_set_text(work_time_card.desc_label, buf);
+        lvgl_port_unlock();
     }
 }
 
