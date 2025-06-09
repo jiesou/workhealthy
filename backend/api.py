@@ -1,3 +1,4 @@
+import time
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -106,17 +107,7 @@ async def root():
 @app.get("/status")
 async def get_status():
     """获取当前状态"""
-    status = health_monitor.get_status()
-    # 转换datetime对象为字符串
-    for key, value in status.items():
-        if isinstance(value, datetime):
-            status[key] = value.isoformat()
-
-    if "health_metrics" in status and status["health_metrics"]:
-        if "timestamp" in status["health_metrics"] and isinstance(status["health_metrics"]["timestamp"], datetime):
-            status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat()
-
-    return status
+    return health_monitor.output_insights()
 
 
 @app.get("/video_feed")
@@ -157,60 +148,45 @@ async def get_health_metrics(days: int = 7, db: Session = Depends(get_db)):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket连接，用于实时推送状态更新"""
-    print(f"收到新的WebSocket连接: {websocket.client}")
+    print(f"[/ws] 收到新的 WebSocket 连接: {websocket.client}")
     try:
         await websocket.accept()
-        print(f"WebSocket连接已接受: {websocket.client}")
+        print(f"[/ws] 连接已接受: {websocket.client}")
         connected_clients.add(websocket)
-        print(f"当前连接的客户端数量: {len(connected_clients)}")
-
-        # 立即发送一次当前状态
-        status = health_monitor.get_status()
-
-        # 转换datetime对象为字符串
-        for key, value in status.items():
-            if isinstance(value, datetime):
-                status[key] = value.isoformat()
-
-        if "health_metrics" in status and status["health_metrics"]:
-            if "timestamp" in status["health_metrics"] and isinstance(status["health_metrics"]["timestamp"], datetime):
-                status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat()
+        print(f"[/ws] 当前连接的客户端数量: {len(connected_clients)}")
 
         # 发送欢迎消息
         await websocket.send_json({
             "type": "welcome",
             "message": "WebSocket连接已建立",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": time.time(),
         })
-
-        # 发送当前状态
-        await websocket.send_json(status)
 
         while True:
             # 等待客户端消息（保持连接）
             try:
                 data = await websocket.receive_text()
-                print(f"收到WebSocket消息: {data[:20]}...")
+                print(f"[/ws] 收到消息: {data[:20]}...")
                 json_data = json.loads(data)
                 if "action" in json_data:
                     action = json_data["action"]
                     if action == "refresh_generator_summary_health":
                         health_monitor.refresh_generator_summary_health()
             except json.JSONDecodeError:
-                print(f"WebSocket收到无效的JSON数据: {data[:20]}...")
+                print(f"[/ws] 收到无效的JSON数据: {data[:20]}...")
             except WebSocketDisconnect:
-                print(f"WebSocket连接断开: {websocket.client}")
+                print(f"[/ws] 连接断开: {websocket.client}")
                 if websocket in connected_clients:
                     connected_clients.remove(websocket)
                 break
             except Exception as e:
-                print(f"WebSocket错误: {str(e)}")
+                print(f"[/ws] 错误: {str(e)}")
     except WebSocketDisconnect:
-        print(f"WebSocket连接断开: {websocket.client}")
+        print(f"[/ws] 连接断开: {websocket.client}")
         if websocket in connected_clients:
             connected_clients.remove(websocket)
     except Exception as e:
-        print(f"WebSocket错误: {str(e)}")
+        print(f"[/ws] 错误: {str(e)}")
         if websocket in connected_clients:
             connected_clients.remove(websocket)
 
@@ -222,34 +198,24 @@ async def push_status_updates():
     while True:
         try:
             if connected_clients:
-                status = health_monitor.get_status()
-                print(f"推送状态更新: {status}")
+                status = health_monitor.output_insights()
+                print(f"[/ws push] 推送状态更新: {status}")
 
-                # 转换datetime对象为字符串
-                for key, value in status.items():
-                    if isinstance(value, datetime):
-                        status[key] = value.isoformat()
-
-                if "health_metrics" in status and status["health_metrics"]:
-                    if "timestamp" in status["health_metrics"] and isinstance(status["health_metrics"]["timestamp"], datetime):
-                        status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat()
-
+                clients_to_disconnect = set()
                 # 向所有连接的客户端发送状态更新
-                disconnected_clients = set()
                 for client in connected_clients:
                     try:
                         await client.send_json(status)
                     except Exception as e:
                         print(f"向客户端发送数据失败: {str(e)}")
-                        disconnected_clients.add(client)
+                        clients_to_disconnect.add(client)
 
                 # 移除断开连接的客户端
-                for client in disconnected_clients:
-                    if client in connected_clients:
-                        connected_clients.remove(client)
-                        print(f"移除断开的客户端，当前连接数: {len(connected_clients)}")
+                connected_clients.difference_update(clients_to_disconnect)
+                if clients_to_disconnect:
+                    print(f"[/ws push] 移除断开的客户端，当前连接数: {len(connected_clients)}")
         except Exception as e:
-            print(f"推送状态更新时出错: {str(e)}")
+            print(f"[/ws push] 推送状态更新时出错: {str(e)}")
 
         # 每秒更新一次
         await asyncio.sleep(0.5)
@@ -286,14 +252,8 @@ async def video_status():
 @app.get("/toggle_yolo/{enable}")
 async def toggle_yolo(enable: bool):
     """启用或禁用YOLO分析处理"""
-    try:
-        result = health_monitor.video_processor.set_yolo_processing(enable)
-        action = "启用" if enable else "禁用"
-        print(f"已{action} YOLO处理")
-        return result
-    except Exception as e:
-        print(f"切换YOLO处理状态出错: {str(e)}")
-        return {"status": "error", "message": str(e)}
+    health_monitor.video_processor.set_yolo_processing(enable)
+    return { "status": "success", "message": f"YOLO处理已{'启用' if enable else '禁用'}" }
 
 
 def detect_hat_with_yolo(image_path, yolo_model):

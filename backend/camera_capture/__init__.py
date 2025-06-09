@@ -12,7 +12,7 @@ class BaseCameraCapture(ABC):
     def __init__(self):
         # (height, width, 3), BGR格式
         self.latest_frame: np.ndarray | None = None
-        self.latest_frame_time = None
+        self.latest_frame_time_ms: int | None = None
         self.is_running = False
         self.connected = False
         self.frame_lock = threading.Lock()
@@ -27,11 +27,11 @@ class BaseCameraCapture(ABC):
         """停止摄像头捕获"""
         pass
 
-    def get_latest_frame(self) -> tuple[np.ndarray | None, float | None]:
+    def get_latest_frame(self) -> tuple[np.ndarray | None, int | None]:
         """获取最新帧（线程安全）"""
         with self.frame_lock:
             if self.latest_frame is not None:
-                return self.latest_frame.copy(), self.latest_frame_time
+                return self.latest_frame.copy(), self.latest_frame_time_ms
             return None, None
 
     def is_connected(self):
@@ -42,7 +42,7 @@ class BaseCameraCapture(ABC):
         """更新最新帧（内部方法，线程安全）"""
         with self.frame_lock:
             self.latest_frame = frame
-            self.latest_frame_time = time.time()
+            self.latest_frame_time_ms = int(time.time_ns() / 1_000_000)
 
 # fmt: off
 from .websocket import WebSocketCameraCapture

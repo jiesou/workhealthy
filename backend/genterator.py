@@ -14,15 +14,7 @@ class GeneratorService:
                 "OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         )
         self.model = os.getenv("OPENAI_MODEL", "deepseek-r1-distill-llama-8b")
-        self.prompt_data = {}
-
         self.summary_health_message = "正在处理..."  # LVGL只有英文省略号的字体
-
-    def update_data(self, data):
-        """
-        更新健康状态数据
-        """
-        self.prompt_data = data
 
     ai_summary_prompt = """你是一个世界级超级智能语言处理模型。用户在工位上，你需要总结以下一系列关于这个人（即用户）的健康相关的状态数据，主要包含关键信息解读，100字左右。
 注意：
@@ -32,14 +24,12 @@ class GeneratorService:
 - 以下用户的健康状态数据以JSON形式提供，你需要回复纯文本的响应：
 """
 
-    def refresh_summary_health(self):
+    def refresh_summary_health(self, data):
         """
-        根据最新的健康指标，在后台更新 summary_health_message
+        根据输入的最新的健康指标 data，在后台更新 summary_health_message
         使用流式API实时累积响应
         """
-        if not self.prompt_data:
-            return "[GeneratorService] 没有可用的健康数据"
-
+        
         def stream_worker():
             try:
                 self.summary_health_message = ""  # 重置消息
@@ -54,7 +44,7 @@ class GeneratorService:
                         },
                         {
                             "role": "user",
-                            "content": str(self.prompt_data)
+                            "content": str(data)  # 将数据转换为字符串
                         }
                     ],
                     stream=True

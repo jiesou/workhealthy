@@ -18,7 +18,7 @@ if __name__ == "__main__":
         print(f"使用视频代理服务器: {video_proxy_url}")
     
     # 启动FastAPI应用，确保启用WebSocket支持
-    print("正在启动后端服务，WebSocket端点: ws://" + host + ":" + str(port) + "/ws")
+    print("=== 正在启动后端服务，WebSocket端点: ws://" + host + ":" + str(port) + "/ws")
     uvicorn.run(
         "backend.api:app", 
         host=host, 
