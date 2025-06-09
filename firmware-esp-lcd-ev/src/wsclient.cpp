@@ -6,9 +6,15 @@
 
 WebSocketsClient ws;
 void (*onMessageCallback)(const String &message) = nullptr;
+String fragmentBuffer = ""; // 用于存储分片消息
 
-void wsclient_init() {
-    ws.onEvent([](WStype_t type, uint8_t *payload, size_t length) {
+void wsclient_init()
+{
+    ws.setReconnectInterval(1000); // 设置重连间隔为 1 秒
+    ws.enableHeartbeat(1000, 1000, 3); // 设置心跳间隔为 1 秒，超时为 1000 秒，断开重试次数为 3 次
+    ws.onEvent([](WStype_t type, uint8_t *payload, size_t length)
+               {
+        Serial.printf("[WSClient] Event type: %d, length: %d\n", type, length);
         switch (type) {
         case WStype_DISCONNECTED:
             Serial.println("[WSClient] Disconnected");
@@ -24,24 +30,40 @@ void wsclient_init() {
             }
             break;
         case WStype_BIN:
-            Serial.printf("[WSClient] Binary message received, length: %d\n", length);
+            break;
+        case WStype_FRAGMENT_TEXT_START:
+            fragmentBuffer = String((char *)payload); // 开始收集分片消息
+            break;
+        case WStype_FRAGMENT:
+            fragmentBuffer += String((char *)payload); // 继续收集分片
+            break;
+        case WStype_FRAGMENT_FIN:
+            fragmentBuffer += String((char *)payload); // 添加最后一个分片
+            if (onMessageCallback)
+            {
+                onMessageCallback(fragmentBuffer); // 处理完整的消息
+            }
+            fragmentBuffer = ""; // 清空缓冲区
+            break;
+        case WStype_FRAGMENT_BIN_START:
+            fragmentBuffer = "";
+            // 重置缓冲区但不处理二进制分片
             break;
         case WStype_ERROR:
-        case WStype_FRAGMENT_TEXT_START:
-        case WStype_FRAGMENT_BIN_START:
-        case WStype_FRAGMENT:
-        case WStype_FRAGMENT_FIN:
+            Serial.printf("[WSClient] Error, type: %d, length: %d\n", type, length);
             break;
-        }
-    });
+        } });
     ws.begin(WS_SERVER_HOST, WS_SERVER_PORT, "/ws");
 }
-void wsclient_update() {
+void wsclient_update()
+{
     ws.loop();
 }
-void wsclient_send_message(const String &message) {
+void wsclient_send_message(const String &message)
+{
     ws.sendTXT(message.c_str(), message.length());
 }
-void wsclient_on_message(void (*callback)(const String &message)) {
+void wsclient_on_message(void (*callback)(const String &message))
+{
     onMessageCallback = callback;
 }
