@@ -11,8 +11,8 @@ Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 void interactive_init()
 {
     pixels.begin();
-    pixels.setBrightness(10);
-    pixels.setPixelColor(0, pixels.Color(255, 0, 0)); // 初始颜色为红色
+    pixels.setBrightness(50);
+    pixels.setPixelColor(0, pixels.Color(255, 100, 50)); // 初始颜色为黄色
     pixels.show();
 }
 
@@ -44,11 +44,9 @@ void interactive_update(JsonDocument &doc)
         lcd_update_ai_summary(doc["generator_summary_health_message"].as<const char *>());
     }
 
-    if (doc["today_work_duration"].is<int>())
+    if (doc["today_work_duration_message"].is<const char *>())
     {
-        char duration_str[32];
-        snprintf(duration_str, sizeof(duration_str), "%d", doc["today_work_duration"].as<int>());
-        lcd_update_work_time(duration_str);
+        lcd_update_work_time(doc["today_work_duration_message"].as<const char *>());
     }
     else
     {

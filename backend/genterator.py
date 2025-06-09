@@ -16,7 +16,7 @@ class GeneratorService:
         self.model = os.getenv("OPENAI_MODEL", "deepseek-r1-distill-llama-8b")
         self.prompt_data = {}
 
-        self.summary_health_message = ""
+        self.summary_health_message = "正在处理..."  # LVGL只有英文省略号的字体
 
     def update_data(self, data):
         """
@@ -24,7 +24,7 @@ class GeneratorService:
         """
         self.prompt_data = data
 
-    ai_summary_prompt = """你是一个世界级超级智能语言处理模型。用户在工位上，你需要总结以下一系列关于这个人（即用户）的健康相关的状态数据，主要包含关键信息解读，50字以内。
+    ai_summary_prompt = """你是一个世界级超级智能语言处理模型。用户在工位上，你需要总结以下一系列关于这个人（即用户）的健康相关的状态数据，主要包含关键信息解读，100字左右。
 注意：
 - 语言以第二人称“你”来表达，不要直呼用户。
 - 你需要纯中文响应，不能带Markdown语法，不能使用Emoji，不能带状态原始JSON字段。

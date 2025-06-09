@@ -9,7 +9,9 @@
     ],
     "settings": {
         "files.associations": {
-            "variant": "cpp"
+            "variant": "cpp",
+            "string": "cpp",
+            "format": "cpp"
         }
     }
 }
