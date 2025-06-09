@@ -1,6 +1,7 @@
 #include "interactive.h"
 #include <Adafruit_NeoPixel.h>
 #include "lcd.h"
+#include "wsclient.h"
 
 #define NUM_LEDS 1
 #define LED_PIN 4
@@ -37,6 +38,12 @@ void interactive_update(JsonDocument &doc)
         pixels.setPixelColor(0, pixels.Color(255, 0, 0));
     }
 
+    if (doc["generator_summary_health_message"].is<const char *>())
+    {
+        Serial.printf("[wsclient] Generator summary: %s\n", doc["generator_summary_health_message"].as<const char *>());
+        lcd_update_ai_summary(doc["generator_summary_health_message"].as<const char *>());
+    }
+
     if (doc["today_work_duration"].is<int>())
     {
         char duration_str[32];
@@ -48,4 +55,11 @@ void interactive_update(JsonDocument &doc)
         lcd_update_work_time("--");
     }
     pixels.show();
+}
+
+void interactive_push_ai_summary_refresh()
+{
+    wsclient_send_message("{ "
+                          "\"action\": \"refresh_generator_summary_health\" "
+                          "}");
 }

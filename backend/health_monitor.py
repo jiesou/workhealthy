@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from database import crud, get_db
 from .video_processor import VideoProcessor
+from .genterator import GeneratorService
 import os
 import traceback
 
@@ -23,6 +24,7 @@ class HealthMonitor:
             video_url = os.getenv("VIDEO_URL", "0")  # 默认使用本地摄像头
             
         self.video_processor = VideoProcessor(video_url)
+        self.generator_service = GeneratorService()
         self.is_running = False
         self.monitor_thread = None
         self.current_session_id = None
@@ -197,6 +199,7 @@ class HealthMonitor:
             # 新增：获取今日累计在岗时长（秒）
             today_work_duration = crud.get_today_work_duration(db)
             status["today_work_duration"] = today_work_duration
+            status["generator_summary_health_message"] = self.generator_service.summary_health_message
         except Exception as e:
             print(f"获取健康指标或在岗时长时出错: {e}")
         finally:
@@ -206,8 +209,13 @@ class HealthMonitor:
                 except Exception as e:
                     print(f"关闭数据库连接时出错: {e}")
 
+        self.generator_service.update_data(status)
         return status
     
     def set_yolo_processing(self, enable):
         """设置是否启用YOLO处理"""
         return self.video_processor.set_yolo_processing(enable) 
+    
+    def refresh_generator_summary_health(self):
+        """刷新生成器摘要"""
+        self.generator_service.refresh_summary_health()

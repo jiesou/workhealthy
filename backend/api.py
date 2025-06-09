@@ -191,11 +191,20 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 data = await websocket.receive_text()
                 print(f"收到WebSocket消息: {data[:20]}...")
+                json_data = json.loads(data)
+                if "action" in json_data:
+                    action = json_data["action"]
+                    if action == "refresh_generator_summary_health":
+                        health_monitor.refresh_generator_summary_health()
+            except json.JSONDecodeError:
+                print(f"WebSocket收到无效的JSON数据: {data[:20]}...")
             except WebSocketDisconnect:
                 print(f"WebSocket连接断开: {websocket.client}")
                 if websocket in connected_clients:
                     connected_clients.remove(websocket)
                 break
+            except Exception as e:
+                print(f"WebSocket错误: {str(e)}")
     except WebSocketDisconnect:
         print(f"WebSocket连接断开: {websocket.client}")
         if websocket in connected_clients:
@@ -214,7 +223,6 @@ async def push_status_updates():
         try:
             if connected_clients:
                 status = health_monitor.get_status()
-                status["timestamp"] = datetime.now().isoformat()
                 print(f"推送状态更新: {status}")
 
                 # 转换datetime对象为字符串
@@ -224,8 +232,7 @@ async def push_status_updates():
 
                 if "health_metrics" in status and status["health_metrics"]:
                     if "timestamp" in status["health_metrics"] and isinstance(status["health_metrics"]["timestamp"], datetime):
-                        status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat(
-                        )
+                        status["health_metrics"]["timestamp"] = status["health_metrics"]["timestamp"].isoformat()
 
                 # 向所有连接的客户端发送状态更新
                 disconnected_clients = set()

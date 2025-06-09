@@ -99,7 +99,7 @@ void setup()
         for (;;)
         {
           wsclient_update();
-          vTaskDelay(1 / portTICK_PERIOD_MS); // 1ms 刷新一次 wsclient
+          vTaskDelay(1 / portTICK_PERIOD_MS); // 1ms 刷新一次，让出看门狗
         }
       },
       "wsclient_task",

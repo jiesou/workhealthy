@@ -69,8 +69,8 @@ class UdpCameraCapture(BaseCameraCapture):
                     if frame is not None:
                         self._update_frame(frame)
                         self.connected = True
-                        print(
-                            f"[UdpCamera] 完整JPEG帧, 大小: {len(latest_frame)} bytes, 间隔: {time.time() - last_frame_time:.2f}s")
+                        # print(
+                            # f"[UdpCamera] 完整JPEG帧, 大小: {len(latest_frame)} bytes, 间隔: {time.time() - last_frame_time:.2f}s")
                         last_frame_time = time.time()
                     else:
                         print("[UdpCamera] JPEG解码失败")
