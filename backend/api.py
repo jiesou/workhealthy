@@ -16,7 +16,7 @@ import pickle
 from ultralytics import YOLO
 
 from database import crud, get_db
-from .health_monitor import HealthMonitor
+from .monitor import Monitor
 
 # 存储所有连接的客户端
 connected_clients: set[WebSocket] = set()
@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
     print("应用启动中...")
-    health_monitor.start()
+    monitor.start()
 
     # 启动后台任务
     background_task = asyncio.create_task(push_status_updates())
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
         await background_task
     except asyncio.CancelledError:
         pass
-    health_monitor.stop()
+    monitor.stop()
 
 # 创建FastAPI应用
 app = FastAPI(title="工位健康监测系统", lifespan=lifespan)
@@ -95,7 +95,7 @@ app.add_middleware(
 # 创建健康监测服务
 # 从环境变量获取视频URL
 video_url = os.getenv("VIDEO_URL")
-health_monitor = HealthMonitor(video_url)
+monitor = Monitor(video_url)
 
 
 @app.get("/")
@@ -107,7 +107,7 @@ async def root():
 @app.get("/status")
 async def get_status():
     """获取当前状态"""
-    return health_monitor.output_insights()
+    return monitor.output_insights()
 
 
 @app.get("/video_feed")
@@ -115,7 +115,7 @@ async def video_feed():
     """向前端提供 mjpeg 视频流"""
     async def generate():
         while True:
-            frame = health_monitor.video_processor.get_latest_frame()
+            frame = monitor.video_processor.get_latest_frame()
             if frame is not None:
                 # 转换为JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
@@ -171,7 +171,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if "action" in json_data:
                     action = json_data["action"]
                     if action == "refresh_generator_summary_health":
-                        health_monitor.refresh_generator_summary_health()
+                        monitor.refresh_generator_summary_health()
             except json.JSONDecodeError:
                 print(f"[/ws] 收到无效的JSON数据: {data[:20]}...")
             except WebSocketDisconnect:
@@ -198,7 +198,7 @@ async def push_status_updates():
     while True:
         try:
             if connected_clients:
-                status = health_monitor.output_insights()
+                status = monitor.output_insights()
                 print(f"[/ws push] 推送状态更新: {status}")
 
                 clients_to_disconnect = set()
@@ -225,18 +225,18 @@ async def push_status_updates():
 async def video_status():
     """检查视频流连接状态"""
     status = {
-        "video_url": health_monitor.video_processor.video_url,
+        "video_url": monitor.video_processor.video_url,
         "connected": False,
         "last_frame_time": None,
         "error": None
     }
 
     # 检查是否有最新帧
-    frame = health_monitor.video_processor.get_latest_frame()
+    frame = monitor.video_processor.get_latest_frame()
     if frame is not None:
         status["connected"] = True
-        if health_monitor.video_processor.last_frame_time:
-            status["last_frame_time"] = health_monitor.video_processor.last_frame_time.isoformat()
+        if monitor.video_processor.last_frame_time:
+            status["last_frame_time"] = monitor.video_processor.last_frame_time.isoformat()
     else:
         status["error"] = "未获取到视频帧"
 
@@ -252,7 +252,7 @@ async def video_status():
 @app.get("/toggle_yolo/{enable}")
 async def toggle_yolo(enable: bool):
     """启用或禁用YOLO分析处理"""
-    health_monitor.video_processor.set_yolo_processing(enable)
+    monitor.video_processor.set_yolo_processing(enable)
     return { "status": "success", "message": f"YOLO处理已{'启用' if enable else '禁用'}" }
 
 

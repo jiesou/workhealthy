@@ -48,7 +48,7 @@ class YoloDetector:
             
             # 尝试加载模型
             try:
-                self.model = YOLO("yolov8n.pt")  # 使用预训练的YOLOv11模型
+                self.model = YOLO("yolov8n.pt")  # 使用预训练的YOLOv8模型
                 # 强制切换到CUDA设备
                 if torch.cuda.is_available():
                     self.model.to('cuda')
@@ -81,7 +81,7 @@ class YoloDetector:
             return self.result
         
         try:
-            yolo_result = self.model(frame)[0]  # 一张图片只有一个结果
+            yolo_result = self.model(frame, verbose=False)[0]  # 一张图片只有一个结果
 
             for box in yolo_result.boxes:
                 cls = int(box.cls[0])

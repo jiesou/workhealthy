@@ -58,11 +58,11 @@ class VideoProcessor:
 
         # 启动视频处理线程"
         self.processing_thread = threading.Thread(
-            target=self._process_video_loop)
+            target=self._process_video_stream)
         self.processing_thread.daemon = True
         self.processing_thread.start()
 
-    def _process_video_loop(self):
+    def _process_video_stream(self):
         """处理视频流的主循环"""
         last_processing_time = 0
         while True:
