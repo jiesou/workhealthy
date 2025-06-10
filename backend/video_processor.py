@@ -58,11 +58,11 @@ class VideoProcessor:
 
         # 启动视频处理线程"
         self.processing_thread = threading.Thread(
-            target=self._process_video_stream)
+            target=self._process_video_loop)
         self.processing_thread.daemon = True
         self.processing_thread.start()
 
-    def _process_video_stream(self):
+    def _process_video_loop(self):
         """处理视频流的主循环"""
         last_processing_time = 0
         while True:
@@ -157,49 +157,49 @@ class VideoProcessor:
         current_time_ms = int(time.time_ns() / 1_000_000)
         
         if diff_ratio > 0.4:  # 如果差异比例大于阈值，认为有活动
-            self.status["is_active"] = True
-            self.status["active_time"] = current_time_ms
+            self.status.is_active = True
+            self.status.active_time = current_time_ms
         else:
             # 如果已经有活动时间记录，并且间隔超过10秒，则认为静止
-            if self.status["active_time"] > 0:
-                inactivity_duration = (current_time_ms - self.status["active_time"]) / 1000
+            if self.status.active_time > 0:
+                inactivity_duration = (current_time_ms - self.status.active_time) / 1000
                 if inactivity_duration > 10:  # 10秒无活动认为静止
-                    self.status["is_active"] = False
+                    self.status.is_active = False
 
         # 日志记录
-        self.logger.log_activity(self.frame_index, diff_ratio, self.status["is_active"])
+        self.logger.log_activity(self.frame_index, diff_ratio, self.status.is_active)
 
     def _update_person_status(self):
         """更新人体检测状态"""
         current_time_ms = int(time.time_ns() / 1_000_000)
         
         if self.detection_result['person_detected']:
-            self.status["is_person_detected"] = True
-            self.status["person_detected_time"] = current_time_ms
+            self.status.is_person_detected = True
+            self.status.person_detected_time = current_time_ms
         else:
             # 如果现在没有人，但之前检测到人，检查absence时间
-            if self.status["is_person_detected"] and self.status["person_detected_time"] > 0:
-                absence_duration = (current_time_ms - self.status["person_detected_time"]) / 1000
+            if self.status.is_person_detected and self.status.person_detected_time > 0:
+                absence_duration = (current_time_ms - self.status.person_detected_time) / 1000
                 if absence_duration > 2:  # 2秒后认为人离开
-                    self.status["is_person_detected"] = False
+                    self.status.is_person_detected = False
             else:
-                self.status["is_person_detected"] = False
+                self.status.is_person_detected = False
 
     def _update_cup_status(self):
         """更新水杯检测状态"""
         current_time_ms = int(time.time_ns() / 1_000_000)
         
         if self.detection_result['cup_detected']:
-            self.status["is_cup_detected"] = True
-            self.status["cup_detected_time"] = current_time_ms
+            self.status.is_cup_detected = True
+            self.status.cup_detected_time = current_time_ms
         else:
             # 如果之前检测到水杯，检查absence时间
-            if self.status["is_cup_detected"] and self.status["cup_detected_time"] > 0:
-                no_cup_duration = (current_time_ms - self.status["cup_detected_time"]) / 1000
+            if self.status.is_cup_detected and self.status.cup_detected_time > 0:
+                no_cup_duration = (current_time_ms - self.status.cup_detected_time) / 1000
                 if no_cup_duration > 5:  # 5秒后认为没有水杯
-                    self.status["is_cup_detected"] = False
+                    self.status.is_cup_detected = False
             else:
-                self.status["is_cup_detected"] = False
+                self.status.is_cup_detected = False
 
     def get_latest_frame(self):
         """获取最新的视频帧（用于前端显示，带有检测框）"""

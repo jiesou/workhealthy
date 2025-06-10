@@ -122,9 +122,8 @@ class HealthMonitor:
         
         参数:
             db: 数据库会话
-            status: 当前状态
         """
-        person_detected = self.video_processor.status["is_person_detected"]
+        person_detected = self.video_processor.status.is_person_detected
 
         # 如果检测到人，但没有活动的工作会话，则创建新会话
         if person_detected and not self.current_working_session_id:
@@ -146,7 +145,7 @@ class HealthMonitor:
         is_active = status.is_active
         
         # 如果有人在工位
-        if status.person_detected:
+        if status.is_person_detected:
             # 记录活动状态
             if is_active:
                 # 如果之前不活动，计算不活动持续时间
@@ -199,7 +198,7 @@ class HealthMonitor:
             insights["generator_summary_health_message"] = self.generator_service.summary_health_message
 
             # 2. 喝水状态消息
-            if status["cup_detected"]:
+            if status.is_cup_detected:
                 insights["water_intake_message"] = "检测到水杯，请及时喝水！"
             else:
                 insights["water_intake_message"] = "未检测到水杯，请注意补水！"

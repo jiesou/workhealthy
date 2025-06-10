@@ -82,8 +82,6 @@ void setup()
     // 这里可以处理接收到的消息
     JsonDocument doc;
     deserializeJson(doc, message);
-    String timestamp = doc["timestamp"].as<String>();
-    wsclient_send_message(timestamp);
     interactive_update(doc);
   });
 
