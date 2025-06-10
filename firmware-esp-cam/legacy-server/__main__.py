@@ -1,96 +1,119 @@
-import asyncio, uvicorn
+import asyncio
+from calendar import c
+from matplotlib.pylab import f
+import uvicorn
 import socket
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from collections import defaultdict
 import time
+import signal
+import sys
+from concurrent.futures import ThreadPoolExecutor
 
 app = FastAPI()
 
 # UDP 接收参数
 UDP_IP = "0.0.0.0"
 UDP_PORT = 8099
-CHUNK_LENGTH = 1023
+MAX_PACKET_SIZE = 1472
 
-# 图像缓存（frame_id -> [packet_index -> data]）
-frame_cache = defaultdict(dict)
-frame_packet_count = {}
 latest_frame = None
-latest_frame_time = 0
+last_frame_time = 0
+
+# 添加全局标志
+running = True
 
 
-# 启动后台任务监听 UDP
-@app.on_event("startup")
-async def start_udp_server():
-    asyncio.create_task(udp_listener())
+def signal_handler(sig, frame):
+    global running
+    print('收到停止信号，正在关闭服务器...')
+    running = False
+    sys.exit(0)
 
 
-async def udp_listener():
-    global latest_frame, latest_frame_time
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+# 使用线程池处理UDP接收
+executor = ThreadPoolExecutor(max_workers=1)
+
+
+def udp_receiver():
+    """在独立线程中运行UDP接收"""
+    global latest_frame, last_frame_time, running
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
-    sock.setblocking(False)
+    sock.settimeout(0.001)  # 使用超时而不是非阻塞
 
     print(f"UDP server listening on {UDP_IP}:{UDP_PORT}")
 
-    byte_vector = bytearray()  # 用于累积 JPEG 数据
-
-    while True:
+    # 预分配缓冲区
+    frame_buffer = defaultdict(dict)  # frame_id -> {chunk_id: bytes}
+    frame_chunk_count = {}           # frame_id -> chunk_total
+    CHUNK_LENGTH = 1472
+    while running:
         try:
-            data, addr = sock.recvfrom(CHUNK_LENGTH)
-            print(f"Received packet length: {len(data)}")
+            data, addr = sock.recvfrom(MAX_PACKET_SIZE)
 
-            # 检查是否是新的 JPEG 开始 (FF D8 FF)
-            if (len(data) == CHUNK_LENGTH and
-                len(data) >= 3 and
-                data[0] == 0xFF and
-                data[1] == 0xD8 and
-                    data[2] == 0xFF):
-                print("New JPEG frame detected")
-                byte_vector.clear()
+            # 解析数据包头
+            frame_index = int.from_bytes(data[0:4], 'little')
+            chunk_index = int.from_bytes(data[4:6], 'little')
+            chunk_total = int.from_bytes(data[6:8], 'little')
+            chunk_payload = data[8:]
 
-            # 将当前包的数据添加到累积缓冲区
-            byte_vector.extend(data)
+            print(
+                f"Frame {frame_index}, Chunk {chunk_index}/{chunk_total}, Payload size: {len(chunk_payload)} bytes")
 
-            # 检查是否是 JPEG 结束 (FF D9)
-            if (len(data) != CHUNK_LENGTH and
-                len(data) >= 2 and
-                data[-2] == 0xFF and
-                    data[-1] == 0xD9):
+            # 存入缓存（可能乱序，所以直接放进 dict）
+            frame_buffer[frame_index][chunk_index] = chunk_payload
+            frame_chunk_count[frame_index] = chunk_total
 
-                # 更新全局变量
-                latest_frame = bytes(byte_vector)
-                print(f"JPEG frame complete, size: {len(byte_vector)} bytes, time: {time.time() - latest_frame_time:.2f} seconds")
-                latest_frame_time = time.time()
+            # 如果收齐了，立即组帧
+            if chunk_total - len(frame_buffer[frame_index]) <= 0:
+                chunks = [frame_buffer[frame_index][i]
+                          for i in range(chunk_total) if i in frame_buffer[frame_index]]
+                # 拼好帧
+                latest_frame = b"".join(chunks)
+                # 清理
+                del frame_buffer[frame_index]
+                del frame_chunk_count[frame_index]
 
-                # 清空缓冲区为下一帧做准备
-                byte_vector.clear()
+                print(
+                    f"JPEG frame complete, size: {len(latest_frame)} bytes, time: {time.time() - last_frame_time:.2f} seconds")
+                last_frame_time = time.time()
 
-        except socket.error:
-            # 非阻塞 socket，没有数据时会抛出异常
-            await asyncio.sleep(0.001)  # 短暂休眠避免 CPU 占用过高
+        except socket.timeout:
+            continue
         except Exception as e:
-            print(f"UDP listener error: {e}")
-            await asyncio.sleep(0.01)
+            print(f"UDP receiver error: {e}")
+            time.sleep(0.001)
+
+    sock.close()
 
 
-# MJPEG 视频流接口
+@app.on_event("startup")
+async def start_udp_server():
+    # 在独立线程中启动UDP接收
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(executor, udp_receiver)
+
+# 优化MJPEG流
+
+
 @app.get("/")
 async def mjpeg_stream(request: Request):
     async def stream():
         boundary = "--frame"
+
         while True:
             if await request.is_disconnected():
                 break
 
+            # 检查是否有帧
             if latest_frame is None:
-                # 如果没有最新帧，等待一段时间再检查
-                yield (
-                    f"{boundary}\r\n"
-                    f"Content-Type: image/jpeg\r\n"
-                    f"Content-Length: 0\r\n\r\n"
-                ).encode("utf-8") + b"\r\n"
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.01)  # 减少检查间隔
                 continue
 
             yield (
@@ -98,10 +121,13 @@ async def mjpeg_stream(request: Request):
                 f"Content-Type: image/jpeg\r\n"
                 f"Content-Length: {len(latest_frame)}\r\n\r\n"
             ).encode("utf-8") + latest_frame + b"\r\n"
-            await asyncio.sleep(0.01)  # 控制帧率
+
+            # 控制帧率，目标30FPS
+            await asyncio.sleep(0.0333)
 
     return StreamingResponse(stream(), media_type="multipart/x-mixed-replace; boundary=frame")
 
+# ...existing code...
 
 if __name__ == "__main__":
     # 启动 UDP 监听线程

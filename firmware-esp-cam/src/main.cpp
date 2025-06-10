@@ -2,8 +2,8 @@
 #include <WiFi.h>
 #include "ArduinoJson.h"
 
-#include "CamServer.h"
-#include "WSClient.h"
+#include "udp_client.h"
+#include "wsclient.h"
 
 //
 // WARNING!!! PSRAM IC required for UXGA resolution and high JPEG quality
@@ -90,45 +90,42 @@ void setup()
   Serial.println("");
   Serial.println("WiFi connected");
 
-  // startCameraServer();
-
   Serial.print("Camera Ready! IP:");
   Serial.println(WiFi.localIP());
 
-  camServer.init();
-  wsclient.init();
+  udp_client_init();
+  wsclient_init();
   pinMode(LED_GPIO_NUM, OUTPUT);
-  wsclient.onMessage([](const String &message) {
+  wsclient_on_message([](const String &message)
+                      {
     Serial.printf("[wsclient] Received message: %s\n", message.c_str());
     // 这里可以处理接收到的消息
     JsonDocument doc;
     deserializeJson(doc, message);
-    if (doc["person_detected"].is<bool>())
-    {
-      digitalWrite(LED_GPIO_NUM, doc["person_detected"] == true ? HIGH : LOW);
-    } else {
-      digitalWrite(LED_GPIO_NUM, LOW); // 默认关闭 LED
-    }
+    
   });
 
-  // 使用任务在另一个核心上异步更新 websocket
+  // 核心分配策略：
+  // Core 1: 系统任务 + UDP图传
+  // Core 0: wsclient 任务
+
+  // wsclient 任务 - 固定在 Core 0
   static TaskHandle_t wsTaskHandle = NULL;
-  if (wsTaskHandle == NULL) {
-    xTaskCreatePinnedToCore(
-      [](void *){
-        for (;;) {
-          wsclient.update();
-          vTaskDelay(500 / portTICK_PERIOD_MS); // 500ms 间隔
+  xTaskCreatePinnedToCore(
+      [](void *)
+      {
+        for (;;)
+        {
+          wsclient_update();
+          vTaskDelay(1 / portTICK_PERIOD_MS); // 1ms 刷新一次，让出看门狗
         }
       },
-      "wsclient_update_task",
+      "wsclient_task",
       4096,
       NULL,
       1,
       &wsTaskHandle,
-      1 // 运行在 core 1
-    );
-  }
+      0);
 }
 
 camera_fb_t *fb = NULL;
@@ -140,13 +137,16 @@ void loop()
 {
   unsigned long now = millis();
   if (now - lastCaptureTime > 50)
-  { // 控制 20 帧
+  { // 控制 10 帧
     fb = esp_camera_fb_get();
     if (fb)
     {
-      camServer.broadcastImg(fb->buf, fb->len);
+      Serial.printf("Captured frame: %dx%d, format: %d, size: %d bytes\n",
+                    fb->width, fb->height, fb->format, fb->len);
+      udp_client_push_img(fb->buf, fb->len);
       esp_camera_fb_return(fb);
     }
     lastCaptureTime = now;
   }
+  // vTaskDelay(1 / portTICK_PERIOD_MS); // 每次循环让出看门狗
 }
