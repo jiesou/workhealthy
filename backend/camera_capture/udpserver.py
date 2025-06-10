@@ -21,6 +21,7 @@ class UdpCameraCapture(BaseCameraCapture):
         self.chunk_length = 1023
         self.thread = None
         self.loop = None
+        self.discovered_cameras = set()  # 记录已发现的摄像头IP
 
     async def _udp_listener(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -38,6 +39,14 @@ class UdpCameraCapture(BaseCameraCapture):
         while self.is_running:
             try:
                 data, addr = sock.recvfrom(MAX_PACKET_SIZE)
+                camera_ip = addr[0]  # 获取发送方IP
+                
+                # 自动发现新摄像头
+                if camera_ip not in self.discovered_cameras:
+                    self.discovered_cameras.add(camera_ip)
+                    self._register_camera_by_ip(camera_ip)
+                    print(f"[UdpCamera] 发现新摄像头: {camera_ip}")
+
                 if len(data) < 8:
                     continue  # 包头不足，丢弃
 

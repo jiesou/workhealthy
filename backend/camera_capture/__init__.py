@@ -16,6 +16,7 @@ class BaseCameraCapture(ABC):
         self.is_running = False
         self.connected = False
         self.frame_lock = threading.Lock()
+        self.camera_registry = None  # 将在子类中设置
 
     @abstractmethod
     def start(self, video_url: str):
@@ -43,6 +44,11 @@ class BaseCameraCapture(ABC):
         with self.frame_lock:
             self.latest_frame = frame
             self.latest_frame_time_ms = int(time.time_ns() / 1_000_000)
+
+    def _register_camera_by_ip(self, ip: str):
+        """注册新发现的摄像头IP（由子类调用）"""
+        if self.camera_registry:
+            self.camera_registry.register_camera_by_ip(ip, self)
 
 # fmt: off
 from .websocket import WebSocketCameraCapture

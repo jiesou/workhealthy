@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: '/api'
+  baseURL: '/api/monitor/udpserver,0.0.0.0:8099/'
 })
 
 // 健康状态API
@@ -43,11 +43,11 @@ export function connectWebSocket(onMessage, onClose) {
   // 如果是本地开发环境，尝试通过Vite代理连接
   if (isLocalhost) {
     // 尝试通过Vite代理连接
-    wsUrl = `ws://${hostname}:8000/ws`;
+    wsUrl = `ws://${hostname}:8000/monitor/udpserver,0.0.0.0:8099/ws`;
     console.log('使用本地开发环境WebSocket连接');
   } else {
     // 生产环境或局域网环境，直接连接到后端
-    wsUrl = `ws://${hostname}:8000/ws`;
+    wsUrl = `ws://${hostname}:8000/monitor/udpserver,0.0.0.0:8099/ws`;
     console.log('使用生产环境WebSocket连接');
   }
 

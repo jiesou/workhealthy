@@ -28,4 +28,4 @@ if __name__ == "__main__":
         ws_ping_timeout=30,
         log_level="info",
         access_log=True
-    ) 
+    )

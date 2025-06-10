@@ -110,7 +110,6 @@ class VideoProcessor:
                 yolo_start = time.time()
                 # 使用YOLO检测器进行检测
                 self.detection_result = self.yolo_detector.detect(frame)
-                print(f"[VideoProcessor] YOLO检测结果: {self.detection_result}")
                 self.annotated_frame = self.detection_result.annotated_frame
 
                 self._update_person_status()

@@ -3,6 +3,7 @@
 
 #define WS_SERVER_HOST "192.168.10.101"
 #define WS_SERVER_PORT 8000
+#define WS_SERVER_PATH "/monitor/udpserver,0.0.0.0:8099/ws"
 
 WebSocketsClient ws;
 void (*onMessageCallback)(const String &message) = nullptr;
@@ -53,7 +54,7 @@ void wsclient_init()
             Serial.printf("[WSClient] Error, type: %d, length: %d\n", type, length);
             break;
         } });
-    ws.begin(WS_SERVER_HOST, WS_SERVER_PORT, "/ws");
+    ws.begin(WS_SERVER_HOST, WS_SERVER_PORT, WS_SERVER_PATH);
 }
 void wsclient_update()
 {

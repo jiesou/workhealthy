@@ -89,7 +89,9 @@ class YoloDetector:
                 cls = int(box.cls[0])
                 if cls == 0:  # person
                     self.result.person_detected = True
-                if cls == 41:  # cup
+                elif cls == 39:  # bottle
+                    self.result.cup_detected = True
+                elif cls == 41:  # cup
                     self.result.cup_detected = True
 
                 # 为所有检测到的对象绘制边界框
