@@ -52,6 +52,14 @@ void interactive_update(JsonDocument &doc)
     {
         lcd_update_work_time("--");
     }
+    if (doc["water_intake_message"].is<const char *>())
+    {
+        lcd_update_cup_detect(doc["water_intake_message"].as<const char *>());
+    }
+    else
+    {
+        lcd_update_cup_detect("未检测到水杯");
+    }
     pixels.show();
 }
 

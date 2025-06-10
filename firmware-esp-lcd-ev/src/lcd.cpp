@@ -62,14 +62,13 @@ void lcd_update_ai_summary(const char *text)
         lvgl_port_unlock();
     }
 }
-void lcd_update_cup_detect(const bool cup_detected)
+void lcd_update_cup_detect(const char *text)
 {
     if (cup_detect_card.desc_label != NULL)
     {
         lvgl_port_lock(-1);
-        char buf[64];
-        snprintf(buf, sizeof(buf), "检测到 %s", cup_detected ? "杯子" : "无杯子");
-        lv_label_set_text(cup_detect_card.desc_label, buf);
+        lv_label_set_text(cup_detect_card.desc_label, text);
+        lv_obj_set_style_text_color(cup_detect_card.desc_label, lv_color_hex(0x888888), 0);
         lvgl_port_unlock();
     }
 }
@@ -207,7 +206,7 @@ void _createUI()
     lv_obj_align_to(cards_container, function_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
 
     /* 创建卡片 */
-    cup_detect_card = _createCard(cards_container, "喝水检测", "检测到--，喝水时间--");
+    cup_detect_card = _createCard(cards_container, "喝水检测", "未检测到水杯");
     work_time_card = _createCard(cards_container, "工作时间", "工作--");
 
     /* 亮度遮罩 */

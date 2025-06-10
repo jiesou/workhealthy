@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 import threading
 import traceback
+from dataclasses import dataclass
 
 from sympy import det
 from torch import Type
@@ -19,7 +20,7 @@ from backend.logger import ActivityLogger
 
 class VideoProcessor:
     """视频处理类，负责从摄像头获取视频流并进行分析"""
-
+    @dataclass
     class DetectionStatus():
         is_person_detected: bool = False
         person_detected_time: int = 0
@@ -46,7 +47,7 @@ class VideoProcessor:
         self.yolo_detector = YoloDetector()
         self.logger = ActivityLogger()
 
-        self.status = VideoProcessor.DetectionStatus()
+        self.status = self.DetectionStatus()
 
         # 帧相关变量
         self.frame_buffer = []
@@ -109,7 +110,8 @@ class VideoProcessor:
                 yolo_start = time.time()
                 # 使用YOLO检测器进行检测
                 self.detection_result = self.yolo_detector.detect(frame)
-                self.annotated_frame = self.detection_result['annotated_frame']
+                print(f"[VideoProcessor] YOLO检测结果: {self.detection_result}")
+                self.annotated_frame = self.detection_result.annotated_frame
 
                 self._update_person_status()
                 self._update_cup_status()
@@ -173,7 +175,7 @@ class VideoProcessor:
         """更新人体检测状态"""
         current_time_ms = int(time.time_ns() / 1_000_000)
         
-        if self.detection_result['person_detected']:
+        if self.detection_result.person_detected:
             self.status.is_person_detected = True
             self.status.person_detected_time = current_time_ms
         else:
@@ -189,7 +191,7 @@ class VideoProcessor:
         """更新水杯检测状态"""
         current_time_ms = int(time.time_ns() / 1_000_000)
         
-        if self.detection_result['cup_detected']:
+        if self.detection_result.cup_detected:
             self.status.is_cup_detected = True
             self.status.cup_detected_time = current_time_ms
         else:

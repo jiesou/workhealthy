@@ -65,9 +65,9 @@ class Monitor:
             insights["today_work_duration_message"] += str(
                 timedelta(seconds=today_work_duration))
             if today_work_duration >= 120:
-                insights["today_work_duration_message"] += "，已工作较长时间"
+                insights["today_work_duration_message"] += "\n已工作较长时间"
             else:
-                insights["today_work_duration_message"] += "，请继续保持！"
+                insights["today_work_duration_message"] += "\n请继续保持！"
 
         except Exception as e:
             print(f"在数据库获取健康指标时出错: {e}")

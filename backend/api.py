@@ -199,6 +199,9 @@ async def push_status_updates():
         try:
             if connected_clients:
                 status = monitor.output_insights()
+                status["timestamp"] = datetime.now().isoformat()
+                status["person_detected"] = monitor.video_processor.status.is_person_detected
+                status["cup_detected"] = monitor.video_processor.status.is_cup_detected
                 print(f"[/ws push] 推送状态更新: {status}")
 
                 clients_to_disconnect = set()

@@ -1,10 +1,13 @@
+from dataclasses import dataclass, field
 import os
 import re
+from cycler import V
 import numpy as np
 from typing import Optional, TypedDict
 import cv2
 import time
 import traceback
+
 
 # 在导入YOLO之前设置torch.load配置
 try:
@@ -21,6 +24,7 @@ except ImportError:
 
 # 导入YOLO
 try:
+    print("尝试导入ultralytics YOLO模块...")
     from ultralytics import YOLO
 except ImportError:
     print("警告: 无法导入ultralytics，部分功能可能不可用")
@@ -28,19 +32,14 @@ except ImportError:
 
 class YoloDetector:
     """YOLO目标检测类，负责检测人和水杯"""
-
-    class DetectionResult(TypedDict):
-        person_detected: bool
-        cup_detected: bool
-        annotated_frame: Optional[np.ndarray]
+    @dataclass
+    class DetectionResult():
+        person_detected: bool = False
+        cup_detected: bool = False
+        annotated_frame: Optional[np.ndarray] = field(default=False, repr=False)
     def __init__(self):
         """初始化YOLO检测器"""
         self.model = None
-        self.result: YoloDetector.DetectionResult = {
-            'person_detected': False,
-            'cup_detected': False,
-            'annotated_frame': None
-        }
         if YOLO is not None:
             model_path = os.path.join(os.path.dirname(__file__), "models", "yolov8n.pt")
             if not os.path.exists(os.path.dirname(model_path)):
@@ -82,19 +81,22 @@ class YoloDetector:
         
         try:
             yolo_result = self.model(frame, verbose=False)[0]  # 一张图片只有一个结果
+            self.result = self.DetectionResult() # 重置结果
 
             for box in yolo_result.boxes:
+                if box.conf[0] < 0.5:
+                    continue  # 跳过置信度低的
                 cls = int(box.cls[0])
                 if cls == 0:  # person
-                    self.result['person_detected'] = True
+                    self.result.person_detected = True
                 if cls == 41:  # cup
-                    self.result['cup_detected'] = True
+                    self.result.cup_detected = True
 
                 # 为所有检测到的对象绘制边界框
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
                 conf = float(box.conf[0])
                 cls_id = int(box.cls[0])
-                label = f"{self.model.names[cls_id]} {conf:.2f}"
+                label = f"{cls} {self.model.names[cls_id]} {conf:.2f}"
                 
                 # 绘制边界框
                 cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -107,7 +109,7 @@ class YoloDetector:
                 # 绘制标签文本
                 cv2.putText(annotated_frame, label, (x1, y1 - 5), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            self.result['annotated_frame'] = annotated_frame
+            self.result.annotated_frame = annotated_frame
         except Exception as e:
             print(f"YOLO检测出错: {e}")
             traceback.print_exc()
