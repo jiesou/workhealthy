@@ -47,6 +47,10 @@ def get_monitor(blur_video_url: str) -> tuple[str, Monitor]:
     raise HTTPException(
         status_code=404, detail=f"Monitor not found")
 
+@router.get("/list")
+async def list_monitors():
+    """获取所有监控器的列表"""
+    return list(monitor_registry.monitors.keys())
 
 @router.get("/{blur_video_url}/status")
 async def get_monitor_status(monitor_info: tuple[str, Monitor] = Depends(get_monitor)):

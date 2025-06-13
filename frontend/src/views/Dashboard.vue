@@ -21,7 +21,7 @@
       </div>
       
       <div class="health-section">
-        <HealthAdvice :metrics="health_metrics" />
+        <HealthAdvice :metrics="healthMetrics" />
       </div>
     </div>
     
@@ -53,202 +53,193 @@
       <StatusCard 
         title="工作时长" 
         :status="formatSessionWorkDuration" 
-        :description="'工作时长'"
+        description="工作时长"
         icon="time"
-        :type="'success'"
+        type="success"
       />
     </div>
   </div>
 </template>
 
-<script>
-import { getStatus, connectWebSocket } from '@/services/api'
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { encodeMonitorUrl, getStatus, connectWebSocket } from '@/services/api'
 import HealthAdvice from '@/components/HealthAdvice.vue'
 import StatusCard from '@/components/StatusCard.vue'
+import eventBus from '@/services/eventBus'
 
-export default {
-  name: 'Dashboard',
-  components: {
-    HealthAdvice,
-    StatusCard
-  },
-  data() {
-    return {
-      videoUrl: ' http://localhost:8081/mjpeg',
-      personDetected: false,
-      isActive: false,
-      cupDetected: false,
-      current_session_id: null,
-      lastCupTime: null,
-      lastActivityTime: null,
-      health_metrics: null,
-      lastUpdated: null,
-      websocket: null,
-      // 本地会话计时相关
-      sessionWorkDuration: 0, // 累计"有人"时长（秒）
-      personStartTime: null,  // 最近一次"开始有人"的时间戳（ms）
-      sessionWorkDurationDisplay: 0, // 用于页面显示
-      timer: null
-    }
-  },
-  computed: {
-    workingDuration() {
-      if (!this.workStartTime) return 0
-      return Math.floor((new Date() - new Date(this.workStartTime)) / (1000 * 60))
-    },
-    formatWorkDuration() {
-      if (!this.workStartTime) return '未开始'
-      
-      const minutes = this.workingDuration
-      if (minutes < 60) {
-        return `${minutes}分钟`
-      } else {
-        const hours = Math.floor(minutes / 60)
-        const remainMinutes = minutes % 60
-        return `${hours}小时${remainMinutes}分钟`
-      }
-    },
-    inactiveTime() {
-      if (!this.lastActivityTime || this.isActive) return 0
-      return Math.floor((new Date() - new Date(this.lastActivityTime)) / (1000 * 60))
-    },
-    sinceCupTime() {
-      if (!this.lastCupTime) return 999
-      return Math.floor((new Date() - new Date(this.lastCupTime)) / (1000 * 60))
-    },
-    workTimeDescription() {
-      if (!this.workStartTime) return '未检测到工作'
-      
-      if (this.workingDuration < 30) {
-        return '工作时间较短'
-      } else if (this.workingDuration < 120) {
-        return '工作时间适中'
-      } else {
-        return '已工作较长时间'
-      }
-    },
-    workTimeType() {
-      if (!this.workStartTime) return 'info'
-      
-      if (this.workingDuration < 120) {
-        return 'success'
-      } else if (this.workingDuration < 180) {
-        return 'warning'
-      } else {
-        return 'danger'
-      }
-    },
-    formatSessionWorkDuration() {
-      const sec = this.sessionWorkDurationDisplay
-      if (!sec || sec <= 0) return '未开始'
-      const h = Math.floor(sec / 3600)
-      const m = Math.floor((sec % 3600) / 60)
-      const s = sec % 60
-      if (h > 0) return `${h}小时${m}分${s}秒`
-      if (m > 0) return `${m}分${s}秒`
-      return `${s}秒`
-    }
-  },
-  methods: {
-    // 加载视频流配置
-    loadVideoSettings() {
-      const savedSettings = localStorage.getItem('workHealthySettings');
-      if (savedSettings) {
-        try {
-          const settings = JSON.parse(savedSettings);
-          if (settings.videoUrl) {
-            this.videoUrl = settings.videoUrl;
-          }
-        } catch (e) {
-          console.error('解析保存的设置失败:', e);
-        }
-      }
-    },
-    // 获取状态
-    async fetchStatus() {
-      try {
-        const response = await getStatus()
-        this.updateStatus(response.data)
-        this.lastUpdated = new Date().toLocaleTimeString()
-      } catch (error) {
-        console.error('获取状态出错:', error)
-      }
-    },
-    
-    // 更新状态
-    updateStatus(status) {
-      // 只处理person_detected相关逻辑
-      const prevPersonDetected = this.personDetected
-      this.personDetected = status.person_detected
-      // 进入"有人"状态
-      if (this.personDetected && !prevPersonDetected) {
-        this.personStartTime = Date.now()
-      }
-      // 进入"无人"状态
-      if (!this.personDetected && prevPersonDetected) {
-        if (this.personStartTime) {
-          this.sessionWorkDuration += Math.floor((Date.now() - this.personStartTime) / 1000)
-          this.personStartTime = null
-        }
-      }
-      // 其余状态同步
-      this.isActive = status.is_active
-      this.cupDetected = status.cup_detected
-      this.current_session_id = status.current_session_id
-      if (status.is_active) {
-        this.lastActivityTime = new Date()
-      }
-      if (status.cup_detected) {
-        this.lastCupTime = new Date()
-      }
-      if (status.health_metrics) {
-        this.health_metrics = status.health_metrics
-      }
-    },
-    
-    // 处理WebSocket消息
-    handleWebSocketMessage(data) {
-      this.updateStatus(data)
-      this.lastUpdated = new Date().toLocaleTimeString()
-    },
-    
-    // 处理WebSocket关闭
-    handleWebSocketClose(event) {
-      console.log('WebSocket连接已关闭，将尝试重连')
-    }
-  },
-  mounted() {
-    // 加载视频流地址
-    this.loadVideoSettings();
-    
-    // 初始获取状态
-    this.fetchStatus();
-    
-    // 连接WebSocket
-    this.websocket = connectWebSocket(
-      this.handleWebSocketMessage,
-      this.handleWebSocketClose
-    )
-    
-    // 启动本地计时器
-    this.timer = setInterval(() => {
-      if (this.personDetected && this.personStartTime) {
-        this.sessionWorkDurationDisplay = this.sessionWorkDuration + Math.floor((Date.now() - this.personStartTime) / 1000)
-      } else {
-        this.sessionWorkDurationDisplay = this.sessionWorkDuration
-      }
-    }, 1000)
-  },
-  beforeUnmount() {
-    // 关闭WebSocket连接
-    if (this.websocket) {
-      this.websocket.close()
-    }
-    if (this.timer) {
-      clearInterval(this.timer)
-    }
+// 响应式状态
+const currentMonitor = ref(null)
+const personDetected = ref(false)
+const isActive = ref(false)
+const cupDetected = ref(false)
+const currentSessionId = ref(null)
+const lastCupTime = ref(null)
+const lastActivityTime = ref(null)
+const healthMetrics = ref(null)
+const lastUpdated = ref(null)
+const websocket = ref(null)
+
+// 会话工作时长相关
+const sessionWorkDuration = ref(0) // 累计"有人"时长（秒）
+const personStartTime = ref(null)  // 最近一次"开始有人"的时间戳（ms）
+const sessionWorkDurationDisplay = ref(0) // 用于页面显示
+const timer = ref(null)
+
+// 计算属性
+const videoUrl = computed(() => {
+  if (!currentMonitor.value) return ''
+  return `http://localhost:5173/api/monitor/${encodeMonitorUrl(currentMonitor.value)}/video_feed`
+})
+
+const inactiveTime = computed(() => {
+  if (!lastActivityTime.value || isActive.value) return 0
+  return Math.floor((new Date() - new Date(lastActivityTime.value)) / (1000 * 60))
+})
+
+const sinceCupTime = computed(() => {
+  if (!lastCupTime.value) return 999
+  return Math.floor((new Date() - new Date(lastCupTime.value)) / (1000 * 60))
+})
+
+const formatSessionWorkDuration = computed(() => {
+  const sec = sessionWorkDurationDisplay.value
+  if (!sec || sec <= 0) return '未开始'
+  
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = sec % 60
+  
+  if (h > 0) return `${h}小时${m}分${s}秒`
+  if (m > 0) return `${m}分${s}秒`
+  return `${s}秒`
+})
+
+// 方法
+const fetchStatus = async () => {
+  try {
+    const response = await getStatus(currentMonitor.value)
+    updateStatus(response.data)
+    lastUpdated.value = new Date().toLocaleTimeString()
+  } catch (error) {
+    console.error('获取状态出错:', error)
   }
 }
+
+const updateStatus = (status) => {
+  // 处理人体检测状态变化
+  const prevPersonDetected = personDetected.value
+  personDetected.value = status.person_detected
+  
+  // 进入"有人"状态
+  if (personDetected.value && !prevPersonDetected) {
+    personStartTime.value = Date.now()
+  }
+  
+  // 进入"无人"状态
+  if (!personDetected.value && prevPersonDetected) {
+    if (personStartTime.value) {
+      sessionWorkDuration.value += Math.floor((Date.now() - personStartTime.value) / 1000)
+      personStartTime.value = null
+    }
+  }
+  
+  // 更新其他状态
+  isActive.value = status.is_active
+  cupDetected.value = status.cup_detected
+  currentSessionId.value = status.current_session_id
+  
+  if (status.is_active) {
+    lastActivityTime.value = new Date()
+  }
+  
+  if (status.cup_detected) {
+    lastCupTime.value = new Date()
+  }
+  
+  if (status.health_metrics) {
+    healthMetrics.value = status.health_metrics
+  }
+}
+
+const handleWebSocketMessage = (data) => {
+  updateStatus(data)
+  lastUpdated.value = new Date().toLocaleTimeString()
+}
+
+const handleWebSocketClose = (event) => {
+  console.log('WebSocket连接已关闭，将尝试重连')
+}
+
+const handleCameraChange = (newCamera) => {
+  console.log('摄像头切换到:', newCamera)
+  currentMonitor.value = newCamera
+  
+  // 关闭旧的WebSocket连接
+  if (websocket.value) {
+    websocket.value.close()
+  }
+
+  // 重新获取状态
+  fetchStatus()
+  
+  // 重新连接WebSocket
+  websocket.value = connectWebSocket(
+    handleWebSocketMessage,
+    handleWebSocketClose,
+    currentMonitor.value
+  )
+}
+
+const startTimer = () => {
+  timer.value = setInterval(() => {
+    if (personDetected.value && personStartTime.value) {
+      sessionWorkDurationDisplay.value = sessionWorkDuration.value + 
+        Math.floor((Date.now() - personStartTime.value) / 1000)
+    } else {
+      sessionWorkDurationDisplay.value = sessionWorkDuration.value
+    }
+  }, 1000)
+}
+
+// 生命周期钩子
+onMounted(() => {
+  // 监听摄像头切换事件
+  eventBus.on('camera-changed', handleCameraChange)
+  
+  // 如果已经有选中的摄像头，立即应用
+  if (eventBus.currentCamera) {
+    currentMonitor.value = eventBus.currentCamera
+  }
+  
+  // 初始获取状态
+  fetchStatus()
+  
+  // 连接WebSocket
+  websocket.value = connectWebSocket(
+    handleWebSocketMessage,
+    handleWebSocketClose,
+    currentMonitor.value
+  )
+  
+  // 启动本地计时器
+  startTimer()
+})
+
+onBeforeUnmount(() => {
+  // 移除事件监听
+  eventBus.off('camera-changed', handleCameraChange)
+  
+  // 关闭WebSocket连接
+  if (websocket.value) {
+    websocket.value.close()
+  }
+  
+  // 清除计时器
+  if (timer.value) {
+    clearInterval(timer.value)
+  }
+})
 </script>
 
 <style scoped>
@@ -375,4 +366,4 @@ export default {
     grid-template-columns: 1fr;
   }
 }
-</style> 
+</style>
