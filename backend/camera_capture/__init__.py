@@ -1,3 +1,7 @@
+import socket
+from typing import Dict, Callable
+from collections import defaultdict
+import asyncio
 import re
 import time
 from matplotlib.pylab import f
@@ -5,18 +9,17 @@ import numpy as np
 import threading
 from abc import ABC, abstractmethod
 
-
 class BaseCameraCapture(ABC):
     """摄像头捕获基类，定义统一接口"""
 
     def __init__(self):
+        # self.monitor_registry = monitor_registry
         # (height, width, 3), BGR格式
         self.latest_frame: np.ndarray | None = None
         self.latest_frame_time_ms: int | None = None
         self.is_running = False
         self.connected = False
         self.frame_lock = threading.Lock()
-        self.camera_registry = None  # 将在子类中设置
 
     @abstractmethod
     def start(self, video_url: str):

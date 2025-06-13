@@ -14,7 +14,7 @@ from backend.monitor_registry import MonitorRegistry
 
 # 创建监控注册表
 monitor_registry = MonitorRegistry()
-monitor_registry.register("udpserver://0.0.0.0:8099")
+monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.100")
 
 # 存储所有连接的 WebSockets 客户端，按 video_url 分组
 connected_clients: dict[str, set[WebSocket]] = {}
@@ -22,22 +22,22 @@ connected_clients: dict[str, set[WebSocket]] = {}
 router = APIRouter(prefix="/monitor", tags=["monitor"])
 
 
-def get_monitor(video_url: str) -> tuple[str, Monitor]:
+def get_monitor(blur_video_url: str) -> tuple[str, Monitor]:
     """
     依赖注入函数：解析video_url并返回监控器实例
     返回 (resolved_url, monitor) 元组
     """
 
-    video_url = urllib.parse.unquote(video_url)
-    print(f"[/monitor/{video_url}] 解析视频URL")
+    blur_video_url = urllib.parse.unquote(blur_video_url)
+    print(f"[/monitor/{blur_video_url}] 解析视频URL")
 
     # 首先检查直接匹配
-    if video_url in monitor_registry.monitors:
-        monitor = monitor_registry.monitors[video_url]
-        return video_url, monitor
+    if blur_video_url in monitor_registry.monitors:
+        monitor = monitor_registry.monitors[blur_video_url]
+        return blur_video_url, monitor
 
     # 支持多个关键词模糊匹配（以逗号分隔）
-    keywords = [kw.strip() for kw in video_url.split(",") if kw.strip()]
+    keywords = [kw.strip() for kw in blur_video_url.split(",") if kw.strip()]
     for existing_url in monitor_registry.monitors.keys():
         if all(kw in existing_url for kw in keywords):
             monitor = monitor_registry.monitors[existing_url]
@@ -48,14 +48,14 @@ def get_monitor(video_url: str) -> tuple[str, Monitor]:
         status_code=404, detail=f"Monitor not found")
 
 
-@router.get("/{video_url}/status")
+@router.get("/{blur_video_url}/status")
 async def get_monitor_status(monitor_info: tuple[str, Monitor] = Depends(get_monitor)):
     """获取指定监控器的状态"""
     resolved_url, monitor = monitor_info
     return monitor.output_insights()
 
 
-@router.get("/{video_url}/video_feed")
+@router.get("/{blur_video_url}/video_feed")
 async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(get_monitor)):
     """指定监控器的视频流"""
     resolved_url, monitor = monitor_info
@@ -76,14 +76,14 @@ async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(get_mon
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
-@router.websocket("/{video_url}/ws")
-async def websocket_monitor(websocket: WebSocket, video_url: str):
+@router.websocket("/{blur_video_url}/ws")
+async def websocket_monitor(websocket: WebSocket, blur_video_url: str):
     """指定监控器的WebSocket连接"""
-    print(f"[/monitor/{video_url}/ws] 收到新的 WebSocket 连接")
+    print(f"[/monitor/{blur_video_url}/ws] 收到新的 WebSocket 连接")
 
     # 手动解析URL（WebSocket不支持依赖注入）
-    resolved_url, monitor = get_monitor(video_url)
-    
+    resolved_url, monitor = get_monitor(blur_video_url)
+
     if resolved_url not in connected_clients:
         connected_clients[resolved_url] = set()
 
@@ -153,7 +153,8 @@ async def push_status_updates():
         await asyncio.sleep(0.5)
 asyncio.create_task(push_status_updates())
 
-@router.get("/{video_url}/toggle_yolo/{enable}")
+
+@router.get("/{blur_video_url}/toggle_yolo/{enable}")
 async def toggle_yolo(enable: bool, monitor_info: tuple[str, Monitor] = Depends(get_monitor)):
     """启用或禁用YOLO分析处理"""
     resolved_url, monitor = monitor_info
