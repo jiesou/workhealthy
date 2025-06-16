@@ -19,6 +19,7 @@ from database import crud, get_db
 
 # 路由
 from .monitor import router as monitor_router
+# from . import history as history_api # Removed
 from .monitor import monitor_registry
 
 ENCODINGS_PATH = "backend/facedata_encodings.pkl"
@@ -97,7 +98,7 @@ async def get_monitors():
     }
 
 app.include_router(monitor_router)
-
+# app.include_router(history_api.router) # Removed
 
 
 # TODO: 专门实现签到，清理 Legacy Code

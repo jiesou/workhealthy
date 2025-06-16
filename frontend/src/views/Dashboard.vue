@@ -52,7 +52,7 @@
       
       <StatusCard 
         title="工作时长" 
-        :status="formatSessionWorkDuration" 
+        :status="todayWorkDurationMessage"
         description="工作时长"
         icon="time"
         type="success"
@@ -63,33 +63,29 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { encodeMonitorUrl, getStatus, connectWebSocket } from '@/services/api'
-import HealthAdvice from '@/components/HealthAdvice.vue'
+import { encodeMonitorUrl, connectWebSocket } from '@/services/api'
+import HealthAdvice from '@/components/HealthAdvice.vue'; // Added back
 import StatusCard from '@/components/StatusCard.vue'
 import eventBus from '@/services/eventBus'
 
 // 响应式状态
-const currentMonitor = ref(null)
 const personDetected = ref(false)
 const isActive = ref(false)
 const cupDetected = ref(false)
 const currentSessionId = ref(null)
 const lastCupTime = ref(null)
 const lastActivityTime = ref(null)
-const healthMetrics = ref(null)
+const healthMetrics = ref(null); // Added back
 const lastUpdated = ref(null)
 const websocket = ref(null)
 
-// 会话工作时长相关
-const sessionWorkDuration = ref(0) // 累计"有人"时长（秒）
-const personStartTime = ref(null)  // 最近一次"开始有人"的时间戳（ms）
-const sessionWorkDurationDisplay = ref(0) // 用于页面显示
-const timer = ref(null)
+// Work duration display
+// const backendWorkDuration = ref(0); // Removed
+const todayWorkDurationMessage = ref('加载中...'); // Added
 
-// 计算属性
 const videoUrl = computed(() => {
-  if (!currentMonitor.value) return ''
-  return `http://localhost:5173/api/monitor/${encodeMonitorUrl(currentMonitor.value)}/video_feed`
+  if (!eventBus.currentMonitor) return ''
+  return `http://localhost:5173/api/monitor/${encodeMonitorUrl(eventBus.currentMonitor)}/video_feed`
 })
 
 const inactiveTime = computed(() => {
@@ -102,52 +98,22 @@ const sinceCupTime = computed(() => {
   return Math.floor((new Date() - new Date(lastCupTime.value)) / (1000 * 60))
 })
 
-const formatSessionWorkDuration = computed(() => {
-  const sec = sessionWorkDurationDisplay.value
-  if (!sec || sec <= 0) return '未开始'
-  
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  const s = sec % 60
-  
-  if (h > 0) return `${h}小时${m}分${s}秒`
-  if (m > 0) return `${m}分${s}秒`
-  return `${s}秒`
-})
+// formatSessionWorkDuration computed property removed
 
 // 方法
-const fetchStatus = async () => {
-  try {
-    const response = await getStatus(currentMonitor.value)
-    updateStatus(response.data)
-    lastUpdated.value = new Date().toLocaleTimeString()
-  } catch (error) {
-    console.error('获取状态出错:', error)
-  }
-}
+// fetchStatus removed
 
 const updateStatus = (status) => {
-  // 处理人体检测状态变化
-  const prevPersonDetected = personDetected.value
-  personDetected.value = status.person_detected
+  // Client-side work duration calculation removed
+  personDetected.value = status.person_detected;
   
-  // 进入"有人"状态
-  if (personDetected.value && !prevPersonDetected) {
-    personStartTime.value = Date.now()
-  }
-  
-  // 进入"无人"状态
-  if (!personDetected.value && prevPersonDetected) {
-    if (personStartTime.value) {
-      sessionWorkDuration.value += Math.floor((Date.now() - personStartTime.value) / 1000)
-      personStartTime.value = null
-    }
-  }
+  // Update todayWorkDurationMessage from WebSocket status
+  todayWorkDurationMessage.value = status.today_work_duration_message || '信息不可用';
   
   // 更新其他状态
-  isActive.value = status.is_active
-  cupDetected.value = status.cup_detected
-  currentSessionId.value = status.current_session_id
+  // isActive.value = status.is_active // is_active not in current WebSocket payload from api/monitor.py
+  cupDetected.value = status.cup_detected // Assuming this still comes from WebSocket
+  currentSessionId.value = status.current_session_id // Assuming this still comes from WebSocket
   
   if (status.is_active) {
     lastActivityTime.value = new Date()
@@ -157,8 +123,10 @@ const updateStatus = (status) => {
     lastCupTime.value = new Date()
   }
   
+  // health_metrics update removed
+  // Restore healthMetrics update (it will likely remain null as health_metrics is not in output_insights)
   if (status.health_metrics) {
-    healthMetrics.value = status.health_metrics
+    healthMetrics.value = status.health_metrics;
   }
 }
 
@@ -173,34 +141,24 @@ const handleWebSocketClose = (event) => {
 
 const handleCameraChange = (newCamera) => {
   console.log('摄像头切换到:', newCamera)
-  currentMonitor.value = newCamera
+  eventBus.currentMonitor = newCamera
   
   // 关闭旧的WebSocket连接
   if (websocket.value) {
     websocket.value.close()
   }
 
-  // 重新获取状态
-  fetchStatus()
+  // fetchStatus() call removed
   
   // 重新连接WebSocket
   websocket.value = connectWebSocket(
     handleWebSocketMessage,
     handleWebSocketClose,
-    currentMonitor.value
+    eventBus.currentMonitor
   )
 }
 
-const startTimer = () => {
-  timer.value = setInterval(() => {
-    if (personDetected.value && personStartTime.value) {
-      sessionWorkDurationDisplay.value = sessionWorkDuration.value + 
-        Math.floor((Date.now() - personStartTime.value) / 1000)
-    } else {
-      sessionWorkDurationDisplay.value = sessionWorkDuration.value
-    }
-  }, 1000)
-}
+// startTimer method removed
 
 // 生命周期钩子
 onMounted(() => {
@@ -209,21 +167,19 @@ onMounted(() => {
   
   // 如果已经有选中的摄像头，立即应用
   if (eventBus.currentCamera) {
-    currentMonitor.value = eventBus.currentCamera
+    eventBus.currentMonitor = eventBus.currentCamera
   }
   
-  // 初始获取状态
-  fetchStatus()
+  // fetchStatus() call removed
   
   // 连接WebSocket
   websocket.value = connectWebSocket(
     handleWebSocketMessage,
     handleWebSocketClose,
-    currentMonitor.value
+    eventBus.currentMonitor
   )
   
-  // 启动本地计时器
-  startTimer()
+  // startTimer() call removed
 })
 
 onBeforeUnmount(() => {
@@ -235,10 +191,7 @@ onBeforeUnmount(() => {
     websocket.value.close()
   }
   
-  // 清除计时器
-  if (timer.value) {
-    clearInterval(timer.value)
-  }
+  // clearInterval(timer.value) removed
 })
 </script>
 
@@ -259,7 +212,7 @@ onBeforeUnmount(() => {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 2fr 1fr; /* Changed back from 1fr */
   gap: 2rem;
   margin-bottom: 2rem;
 }

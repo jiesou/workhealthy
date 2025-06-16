@@ -47,6 +47,27 @@ export const getStatus = async (cameraUrl) => {
   }
 }
 
+// Add this function to the file
+export const getWorkSessionHistory = async (cameraUrl, startDateTs, endDateTs) => {
+  if (!cameraUrl) {
+    console.error('Camera URL is required for fetching work session history');
+    return { data: [] }; // Return empty data or throw error
+  }
+  try {
+    const encodedCameraUrl = encodeMonitorUrl(cameraUrl); // Use existing utility
+    const response = await apiClient.get(`/monitor/${encodedCameraUrl}/history`, { // Updated URL
+      params: {
+        start_date_ts: startDateTs,
+        end_date_ts: endDateTs,
+      },
+    });
+    return response.data; // The backend returns a list of sessions directly
+  } catch (error) {
+    console.error('获取工作会话历史数据出错:', error);
+    throw error;
+  }
+};
+
 // 连接指定摄像头的WebSocket
 export const connectWebSocket = (onMessage, onClose, cameraUrl) => {
   let wsUrl

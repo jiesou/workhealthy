@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, Boolean, create_engine
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -15,34 +15,11 @@ class WorkingSession(Base):
     __tablename__ = "working_sessions"
     
     id = Column(Integer, primary_key=True, index=True)
-    start_time = Column(DateTime, default=datetime.now)
-    end_time = Column(DateTime, nullable=True)
-    duration = Column(Float, nullable=True)  # 单位：分钟
-    
-class ActivityRecord(Base):
-    """活动记录表，记录工人的活动状态"""
-    __tablename__ = "activity_records"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.now)
-    is_active = Column(Boolean, default=False)  # 是否有活动
-    inactive_duration = Column(Float, nullable=True)  # 不活动持续时间（分钟）
-    
-class WaterIntake(Base):
-    """喝水记录表，记录检测到水杯的时间"""
-    __tablename__ = "water_intake"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.now)
-    detected = Column(Boolean, default=False)  # 是否检测到水杯
-    
-class HealthMetrics(Base):
-    """健康指标汇总表，记录每小时的健康状态评分"""
-    __tablename__ = "health_metrics"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.now)
-    
+    start_time = Column(Integer)  # Store as Unix timestamp
+    end_time = Column(Integer, nullable=True)  # Store as Unix timestamp
+    monitor_video_url = Column(String, nullable=False)
+    duration_seconds = Column(Integer, nullable=True)
+
 class SigninRecord(Base):
     """刷脸签到记录表"""
     __tablename__ = "signin_records"

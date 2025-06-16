@@ -1,13 +1,16 @@
 import datetime
 import time
+from database import crud, get_db, models # Added models
 import json
 import asyncio
 import cv2
+from typing import List # Added List
 
 import urllib.parse
 from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from fastapi import Depends, HTTPException
+from sqlalchemy.orm import Session # Added Session
 
 from backend.monitor import Monitor
 from backend.monitor_registry import MonitorRegistry
@@ -51,12 +54,6 @@ def get_monitor(blur_video_url: str) -> tuple[str, Monitor]:
 async def list_monitors():
     """获取所有监控器的列表"""
     return list(monitor_registry.monitors.keys())
-
-@router.get("/{blur_video_url}/status")
-async def get_monitor_status(monitor_info: tuple[str, Monitor] = Depends(get_monitor)):
-    """获取指定监控器的状态"""
-    resolved_url, monitor = monitor_info
-    return monitor.output_insights()
 
 
 @router.get("/{blur_video_url}/video_feed")
@@ -137,16 +134,22 @@ async def push_status_updates():
                     raise Exception(f"Push {video_url} Monitor not found")
                 # 找到这个客户端对应的监控器
                 monitor = monitor_registry.monitors[video_url]
-                status = monitor.output_insights()
-                status["timestamp"] = datetime.datetime.now().isoformat()
-                status["camera_ip"] = video_url
-                status["person_detected"] = monitor.video_processor.status.is_person_detected
-                status["cup_detected"] = monitor.video_processor.status.is_cup_detected
+
+                # today_work_duration logic removed from here
+
+                current_insights = monitor.output_insights() # This now contains the formatted messages
+                status_payload = {
+                    **current_insights, # Spread the insights dictionary
+                    "timestamp": int(time.time()),
+                    "camera_ip": video_url,
+                    "person_detected": monitor.video_processor.status.is_person_detected,
+                    "cup_detected": monitor.video_processor.status.is_cup_detected
+                }
 
                 clients_to_disconnect = set()
                 for client in connected_clients[video_url]:
                     try:
-                        await client.send_json(status)
+                        await client.send_json(status_payload) # Use new status_payload
                     except Exception as e:
                         clients_to_disconnect.add(client)
                 # 清理已断开的客户端
@@ -164,3 +167,22 @@ async def toggle_yolo(enable: bool, monitor_info: tuple[str, Monitor] = Depends(
     resolved_url, monitor = monitor_info
     monitor.video_processor.enable_yolo_processing = enable
     return {"status": "success", "message": f"YOLO处理已{'启用' if enable else '禁用'}"}
+
+@router.get("/{blur_video_url}/history") #, response_model=List[models.WorkingSession])
+async def get_monitor_work_session_history(
+    blur_video_url: str, # This will be handled by get_monitor dependency
+    start_date_ts: int,
+    end_date_ts: int,
+    db: Session = Depends(get_db),
+    monitor_info: tuple[str, Monitor] = Depends(get_monitor) # Use existing dependency
+):
+    resolved_url, monitor = monitor_info
+    # resolved_url is the actual monitor_video_url needed for crud
+
+    sessions = crud.get_work_sessions_for_period(
+        db,
+        monitor_video_url=resolved_url,
+        start_date_ts=start_date_ts,
+        end_date_ts=end_date_ts
+    )
+    return sessions
