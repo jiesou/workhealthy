@@ -3,7 +3,7 @@
 
 #define WS_SERVER_HOST "192.168.10.101"
 #define WS_SERVER_PORT 8000
-#define WS_SERVER_PATH "/monitor/udpserver,0.0.0.0:8099/ws"
+#define WS_SERVER_PATH "/monitor/MY/ws"
 
 WebSocketsClient ws;
 void (*onMessageCallback)(const String &message) = nullptr;

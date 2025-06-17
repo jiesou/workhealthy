@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-container">
     <h1 class="dashboard-title">实时监控</h1>
-    
+
     <div class="dashboard-grid">
       <div class="video-section">
         <div class="glass-card">
@@ -19,50 +19,29 @@
           </div>
         </div>
       </div>
-      
+
       <div class="health-section">
         <HealthAdvice :metrics="healthMetrics" />
       </div>
     </div>
-    
+
     <div class="status-grid">
-      <StatusCard 
-        title="人体检测" 
-        :status="personDetected ? '已检测到' : '未检测到'" 
-        :description="personDetected ? '工位有人' : '工位无人'"
-        icon="person"
-        :type="personDetected ? 'success' : 'info'"
-      />
-      
-      <StatusCard 
-        title="活动状态" 
-        :status="isActive ? '活动中' : '静止中'" 
-        :description="isActive ? '检测到活动' : '未检测到活动'"
-        icon="activity"
-        :type="isActive ? 'success' : (inactiveTime > 15 ? 'warning' : 'info')"
-      />
-      
-      <StatusCard 
-        title="水杯检测" 
-        :status="cupDetected ? '已检测到' : '未检测到'" 
-        :description="cupDetected ? '注意补水' : '记得喝水'"
-        icon="cup"
-        :type="cupDetected ? 'success' : (sinceCupTime > 60 ? 'warning' : 'info')"
-      />
-      
-      <StatusCard 
-        title="工作时长" 
-        :status="todayWorkDurationMessage"
-        description="工作时长"
-        icon="time"
-        type="success"
-      />
+      <StatusCard title="人体检测" :status="personDetected ? '已检测到' : '未检测到'"
+        :description="personDetected ? '工位有人' : '工位无人'" icon="person" :type="personDetected ? 'success' : 'info'" />
+
+      <StatusCard title="活动状态" :status="isActive ? '活动中' : '静止中'" :description="isActive ? '检测到活动' : '未检测到活动'"
+        icon="activity" :type="isActive ? 'success' : (inactiveTime > 15 ? 'warning' : 'info')" />
+
+      <StatusCard title="水杯检测" :status="cupDetected ? '已检测到' : '未检测到'" :description="cupDetected ? '注意补水' : '记得喝水'"
+        icon="cup" :type="cupDetected ? 'success' : (sinceCupTime > 60 ? 'warning' : 'info')" />
+
+      <StatusCard title="工作时长" :status="todayWorkDurationMessage" description="工作时长" icon="time" type="success" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { encodeMonitorUrl, connectWebSocket } from '@/services/api'
 import HealthAdvice from '@/components/HealthAdvice.vue'; // Added back
 import StatusCard from '@/components/StatusCard.vue'
@@ -72,7 +51,6 @@ import eventBus from '@/services/eventBus'
 const personDetected = ref(false)
 const isActive = ref(false)
 const cupDetected = ref(false)
-const currentSessionId = ref(null)
 const lastCupTime = ref(null)
 const lastActivityTime = ref(null)
 const healthMetrics = ref(null); // Added back
@@ -106,23 +84,22 @@ const sinceCupTime = computed(() => {
 const updateStatus = (status) => {
   // Client-side work duration calculation removed
   personDetected.value = status.person_detected;
-  
+
   // Update todayWorkDurationMessage from WebSocket status
   todayWorkDurationMessage.value = status.today_work_duration_message || '信息不可用';
-  
+
   // 更新其他状态
-  // isActive.value = status.is_active // is_active not in current WebSocket payload from api/monitor.py
-  cupDetected.value = status.cup_detected // Assuming this still comes from WebSocket
-  currentSessionId.value = status.current_session_id // Assuming this still comes from WebSocket
-  
+  isActive.value = status.is_active
+  cupDetected.value = status.cup_detected
+
   if (status.is_active) {
     lastActivityTime.value = new Date()
   }
-  
+
   if (status.cup_detected) {
     lastCupTime.value = new Date()
   }
-  
+
   // health_metrics update removed
   // Restore healthMetrics update (it will likely remain null as health_metrics is not in output_insights)
   if (status.health_metrics) {
@@ -130,68 +107,31 @@ const updateStatus = (status) => {
   }
 }
 
-const handleWebSocketMessage = (data) => {
-  updateStatus(data)
-  lastUpdated.value = new Date().toLocaleTimeString()
-}
-
-const handleWebSocketClose = (event) => {
-  console.log('WebSocket连接已关闭，将尝试重连')
-}
-
-const handleCameraChange = (newCamera) => {
-  console.log('摄像头切换到:', newCamera)
-  eventBus.currentMonitor = newCamera
-  
-  // 关闭旧的WebSocket连接
-  if (websocket.value) {
-    websocket.value.close()
-  }
-
-  // fetchStatus() call removed
-  
-  // 重新连接WebSocket
-  websocket.value = connectWebSocket(
-    handleWebSocketMessage,
-    handleWebSocketClose,
-    eventBus.currentMonitor
-  )
-}
-
 // startTimer method removed
 
-// 生命周期钩子
-onMounted(() => {
-  // 监听摄像头切换事件
-  eventBus.on('camera-changed', handleCameraChange)
-  
-  // 如果已经有选中的摄像头，立即应用
-  if (eventBus.currentCamera) {
-    eventBus.currentMonitor = eventBus.currentCamera
+watch(() => eventBus.currentMonitor, (newCamera) => {
+  if (newCamera) {
+    // 关闭旧的WebSocket连接
+    if (websocket.value) {
+      websocket.value.close()
+    }
+
+    // 重新连接WebSocket
+    websocket.value = connectWebSocket(
+      (data) => {
+        updateStatus(data)
+        lastUpdated.value = new Date().toLocaleTimeString()
+      },
+      eventBus.currentMonitor
+    )
   }
-  
-  // fetchStatus() call removed
-  
-  // 连接WebSocket
-  websocket.value = connectWebSocket(
-    handleWebSocketMessage,
-    handleWebSocketClose,
-    eventBus.currentMonitor
-  )
-  
-  // startTimer() call removed
-})
+}, { immediate: true })
 
 onBeforeUnmount(() => {
-  // 移除事件监听
-  eventBus.off('camera-changed', handleCameraChange)
-  
   // 关闭WebSocket连接
   if (websocket.value) {
     websocket.value.close()
   }
-  
-  // clearInterval(timer.value) removed
 })
 </script>
 
@@ -212,7 +152,8 @@ onBeforeUnmount(() => {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr; /* Changed back from 1fr */
+  grid-template-columns: 2fr 1fr;
+  /* Changed back from 1fr */
   gap: 2rem;
   margin-bottom: 2rem;
 }
@@ -296,15 +237,20 @@ onBeforeUnmount(() => {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 1200px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .status-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -314,7 +260,7 @@ onBeforeUnmount(() => {
   .dashboard-container {
     padding: 1rem;
   }
-  
+
   .status-grid {
     grid-template-columns: 1fr;
   }

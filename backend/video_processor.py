@@ -155,10 +155,10 @@ class VideoProcessor:
             self.status.is_active = True
             self.status.active_time = current_time_ms
         else:
-            # 如果已经有活动时间记录，并且间隔超过10秒，则认为静止
+            # 如果已经有活动时间记录，并且间隔超过2秒，则认为静止
             if self.status.active_time > 0:
                 inactivity_duration = (current_time_ms - self.status.active_time) / 1000
-                if inactivity_duration > 10:  # 10秒无活动认为静止
+                if inactivity_duration > 2:  # 2秒无活动认为静止
                     self.status.is_active = False
 
         # 日志记录

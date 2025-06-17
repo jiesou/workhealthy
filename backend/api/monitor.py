@@ -1,14 +1,16 @@
 import datetime
 import time
+
+from h11 import Response
 from database import crud, get_db, models # Added models
 import json
 import asyncio
 import cv2
-from typing import List # Added List
+from typing import List, Union # Added List
 
 import urllib.parse
 from fastapi.responses import StreamingResponse
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, Depends
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session # Added Session
 
@@ -26,22 +28,26 @@ connected_clients: dict[str, set[WebSocket]] = {}
 router = APIRouter(prefix="/monitor", tags=["monitor"])
 
 
-def get_monitor(blur_video_url: str) -> tuple[str, Monitor]:
+def decode_monitor_url(request: Request, blur_video_url: str) -> tuple[str, Monitor]:
     """
     依赖注入函数：解析video_url并返回监控器实例
     返回 (resolved_url, monitor) 元组
     """
 
     blur_video_url = urllib.parse.unquote(blur_video_url)
-    print(f"[/monitor/{blur_video_url}] 解析视频URL")
+    print(f"[/monitor/{blur_video_url}] 解析URL")
+
+    # 特例：如果是 "MY"，则根据对端IP地址查找
+    if blur_video_url == "MY":
+        blur_video_url = request.client.host
 
     # 首先检查直接匹配
     if blur_video_url in monitor_registry.monitors:
         monitor = monitor_registry.monitors[blur_video_url]
         return blur_video_url, monitor
 
-    # 支持多个关键词模糊匹配（以逗号分隔）
-    keywords = [kw.strip() for kw in blur_video_url.split(",") if kw.strip()]
+    # 支持多个关键词模糊匹配（以连字符分隔）
+    keywords = [kw.strip() for kw in blur_video_url.split("-") if kw.strip()]
     for existing_url in monitor_registry.monitors.keys():
         if all(kw in existing_url for kw in keywords):
             monitor = monitor_registry.monitors[existing_url]
@@ -56,9 +62,8 @@ async def list_monitors():
     """获取所有监控器的列表"""
     return list(monitor_registry.monitors.keys())
 
-
 @router.get("/{blur_video_url}/video_feed")
-async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(get_monitor)):
+async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(decode_monitor_url)):
     """指定监控器的视频流"""
     resolved_url, monitor = monitor_info
 
@@ -79,12 +84,10 @@ async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(get_mon
 
 
 @router.websocket("/{blur_video_url}/ws")
-async def websocket_monitor(websocket: WebSocket, blur_video_url: str):
+async def websocket_monitor(websocket: WebSocket, blur_video_url: str):  # 这里不能 Depends
     """指定监控器的WebSocket连接"""
     print(f"[/monitor/{blur_video_url}/ws] 收到新的 WebSocket 连接")
-
-    # 手动解析URL（WebSocket不支持依赖注入）
-    resolved_url, monitor = get_monitor(blur_video_url)
+    resolved_url, monitor = decode_monitor_url(websocket, blur_video_url)
 
     if resolved_url not in connected_clients:
         connected_clients[resolved_url] = set()
@@ -143,8 +146,9 @@ async def push_status_updates():
                     **current_insights, # Spread the insights dictionary
                     "timestamp": int(time.time()),
                     "camera_ip": video_url,
+                    "is_active": monitor.video_processor.status.is_active,
                     "person_detected": monitor.video_processor.status.is_person_detected,
-                    "cup_detected": monitor.video_processor.status.is_cup_detected
+                    "cup_detected": monitor.video_processor.status.is_cup_detected,
                 }
 
                 clients_to_disconnect = set()
@@ -163,7 +167,7 @@ asyncio.create_task(push_status_updates())
 
 
 @router.get("/{blur_video_url}/toggle_yolo/{enable}")
-async def toggle_yolo(enable: bool, monitor_info: tuple[str, Monitor] = Depends(get_monitor)):
+async def toggle_yolo(enable: bool, monitor_info: tuple[str, Monitor] = Depends(decode_monitor_url)):
     """启用或禁用YOLO分析处理"""
     resolved_url, monitor = monitor_info
     monitor.video_processor.enable_yolo_processing = enable
@@ -175,7 +179,7 @@ async def get_monitor_work_session_history(
     start_date_ts: int,
     end_date_ts: int,
     db: Session = Depends(get_db),
-    monitor_info: tuple[str, Monitor] = Depends(get_monitor) # Use existing dependency
+    monitor_info: tuple[str, Monitor] = Depends(decode_monitor_url) # Use existing dependency
 ):
     resolved_url, monitor = monitor_info
     # resolved_url is the actual monitor_video_url needed for crud

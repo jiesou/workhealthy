@@ -65,11 +65,11 @@ class Monitor:
             formatted_duration = str(timedelta(seconds=int(today_work_duration_seconds or 0)))
             insights["today_work_duration_message"] = f"今日在岗: {formatted_duration}"
             if today_work_duration_seconds and today_work_duration_seconds >= 120: # Original threshold was 120 seconds
-                insights["today_work_duration_message"] += "<br>已工作较长时间, 注意休息!"
+                insights["today_work_duration_message"] += "\n已工作较长时间, 注意休息!"
             elif today_work_duration_seconds and today_work_duration_seconds > 0:
-                insights["today_work_duration_message"] += "<br>请继续保持！"
+                insights["today_work_duration_message"] += "\n请继续保持！"
             else:
-                insights["today_work_duration_message"] += "<br>暂无工作记录。"
+                insights["today_work_duration_message"] += "\n暂无工作记录。"
 
         except Exception as e:
             print(f"在数据库获取今日工作时长时出错: {e}")

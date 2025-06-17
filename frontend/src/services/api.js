@@ -14,7 +14,7 @@ const apiClient = axios.create({
 export const encodeMonitorUrl = (cameraUrl) => {
   if (!cameraUrl) return ''
   // 斜杠和冒号在URL中替换为逗号
-  return cameraUrl.replace(/[:/]/g, ',')
+  return cameraUrl.replace(/[:/]/g, '-')
 }
 
 // 获取摄像头列表
@@ -31,20 +31,6 @@ export const getMonitorList = async () => {
 // 健康指标历史数据API
 export function getHealthMetrics(days = 7) {
   return apiClient.get(`/health_metrics?days=${days}`)
-}
-
-// 获取指定摄像头的状态
-export const getStatus = async (cameraUrl) => {
-  try {
-    if (cameraUrl) {
-      // 斜杠和冒号在URL中替换为逗号
-      const response = await apiClient.get(`/monitor/${encodeMonitorUrl(cameraUrl)}/status`)
-      return response
-    }
-  } catch (error) {
-    console.error('获取状态失败:', error)
-    throw error
-  }
 }
 
 // Add this function to the file
@@ -69,13 +55,13 @@ export const getWorkSessionHistory = async (cameraUrl, startDateTs, endDateTs) =
 };
 
 // 连接指定摄像头的WebSocket
-export const connectWebSocket = (onMessage, onClose, cameraUrl) => {
-  let wsUrl
-  if (cameraUrl) {
-    wsUrl = `${WS_BASE_URL}/monitor/${encodeMonitorUrl(cameraUrl)}/ws`
+export const connectWebSocket = (onMessage, video_url) => {
+  if (!video_url) {
+    console.error('视频URL不能为空，无法建立WebSocket连接')
+    return;
   }
-  
-  const ws = new WebSocket(wsUrl)
+  console.log('建立WebSocket连接:', `${WS_BASE_URL}/monitor/${encodeMonitorUrl(video_url)}/ws`)
+  const ws = new WebSocket(`${WS_BASE_URL}/monitor/${encodeMonitorUrl(video_url)}/ws`)
   
   ws.onopen = () => {
     console.log('WebSocket连接已建立')
@@ -92,9 +78,6 @@ export const connectWebSocket = (onMessage, onClose, cameraUrl) => {
   
   ws.onclose = (event) => {
     console.log('WebSocket连接已关闭')
-    if (onClose) {
-      onClose(event)
-    }
   }
   
   ws.onerror = (error) => {
