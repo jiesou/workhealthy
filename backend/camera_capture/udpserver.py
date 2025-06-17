@@ -136,6 +136,8 @@ class UdpCameraClient():
         self.frame_buffer[frame_index][chunk_index] = chunk_payload
         self.frame_chunk_count[frame_index] = chunk_total
 
+        self.cleanup_buffer()
+
         # 如果收齐了，立即组帧
         if chunk_total - len(self.frame_buffer[frame_index]) <= 0:
             try:
@@ -159,3 +161,11 @@ class UdpCameraClient():
             # 清理对应缓存
             del self.frame_buffer[frame_index]
             del self.frame_chunk_count[frame_index]
+
+    def cleanup_buffer(self):
+        """清理 buffer"""
+        # 只保留最近5帧的buffer，防止内存泄漏
+        while len(self.frame_buffer) > 5:
+            key = next(iter(self.frame_buffer))
+            self.frame_buffer.pop(key, None)
+            self.frame_chunk_count.pop(key, None)
