@@ -1,7 +1,12 @@
 import datetime
+import os
+from pydoc import resolve
 import time
 
+from click import File
 from h11 import Response
+from backend import face_signin
+from backend.face_signin import FaceSignin
 from database import crud, get_db, models # Added models
 import json
 import asyncio
@@ -10,12 +15,13 @@ from typing import List, Union # Added List
 
 import urllib.parse
 from fastapi.responses import StreamingResponse
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, Request, UploadFile, WebSocket, WebSocketDisconnect, Depends
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session # Added Session
 
 from backend.monitor import Monitor
 from backend.monitor_registry import MonitorRegistry
+from typing import Optional
 
 # 创建监控注册表
 monitor_registry = MonitorRegistry()
@@ -175,7 +181,6 @@ async def toggle_yolo(enable: bool, monitor_info: tuple[str, Monitor] = Depends(
 
 @router.get("/{blur_video_url}/history") #, response_model=List[models.WorkingSession])
 async def get_monitor_work_session_history(
-    blur_video_url: str, # This will be handled by get_monitor dependency
     start_date_ts: int,
     end_date_ts: int,
     db: Session = Depends(get_db),
@@ -191,3 +196,21 @@ async def get_monitor_work_session_history(
         end_date_ts=end_date_ts
     )
     return sessions
+
+SIGNIN_IMAGES_PATH = "backend/signin_images"
+face_signin = FaceSignin()
+@router.post("/{blur_video_url}/face_signin")
+async def do_face_signin(
+    user_id: Optional[int] = None,
+    monitor_info: tuple[str, Monitor] = Depends(decode_monitor_url)
+):
+    """
+    人脸签到接口
+    """
+    resolved_url, monitor = monitor_info
+    os.makedirs(SIGNIN_IMAGES_PATH, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    image_path = os.path.join(SIGNIN_IMAGES_PATH, f"signin_{timestamp}.jpg")
+    # 获取最新帧并保存
+    cv2.imwrite(image_path, monitor.video_processor.get_latest_frame())
+    return face_signin.signin(user_id, image_path)

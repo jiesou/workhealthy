@@ -1,9 +1,14 @@
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
+import { encodeMonitorUrl } from '@/services/api.js'
 
 // 创建一个响应式的事件总线
 const eventBus = reactive({
   currentMonitor: null, // video_url
-  monitorList: []
+  videoFeedUrl: computed(() => {
+    if (!eventBus.currentMonitor) return ''
+    return `http://localhost:5173/api/monitor/${encodeMonitorUrl(eventBus.currentMonitor)}/video_feed`
+  }),
+  monitorList: [],
 })
 
 export default eventBus

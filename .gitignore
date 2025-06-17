@@ -26,7 +26,8 @@ dist/
 *.log
 *.tmp
 *.bak
-backend/signin_images/
+# 人脸图片照片
+backend/*_images*
 
 # 模型和大文件
 backend/models/

@@ -34,25 +34,31 @@ export function getHealthMetrics(days = 7) {
 }
 
 // Add this function to the file
-export const getWorkSessionHistory = async (cameraUrl, startDateTs, endDateTs) => {
-  if (!cameraUrl) {
-    console.error('Camera URL is required for fetching work session history');
-    return { data: [] }; // Return empty data or throw error
+export const getWorkSessionHistory = async (monitorUrl, startDateTs, endDateTs) => {
+  if (!monitorUrl) {
+    throw new Error('monitorUrl is required');
   }
   try {
-    const encodedCameraUrl = encodeMonitorUrl(cameraUrl); // Use existing utility
-    const response = await apiClient.get(`/monitor/${encodedCameraUrl}/history`, { // Updated URL
+    const response = await apiClient.get(`/monitor/${encodeMonitorUrl(monitorUrl)}/history`, { // Updated URL
       params: {
         start_date_ts: startDateTs,
         end_date_ts: endDateTs,
       },
     });
-    return response.data; // The backend returns a list of sessions directly
+    return response.data;
   } catch (error) {
     console.error('获取工作会话历史数据出错:', error);
     throw error;
   }
 };
+
+export const faceSignin = async(monitorUrl) => {
+  if (!monitorUrl) {
+    console.error('monitorUrl is required for face signin')
+    return
+  }
+  return apiClient.post(`/monitor/${encodeMonitorUrl(monitorUrl)}/face_signin`);
+}
 
 // 连接指定摄像头的WebSocket
 export const connectWebSocket = (onMessage, video_url) => {

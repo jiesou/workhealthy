@@ -69,7 +69,7 @@ class Monitor:
             elif today_work_duration_seconds and today_work_duration_seconds > 0:
                 insights["today_work_duration_message"] += "\n请继续保持！"
             else:
-                insights["today_work_duration_message"] += "\n暂无工作记录。"
+                insights["today_work_duration_message"] += "\n暂无工作记录"
 
         except Exception as e:
             print(f"在数据库获取今日工作时长时出错: {e}")

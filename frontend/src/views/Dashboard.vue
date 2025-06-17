@@ -12,8 +12,8 @@
             </span>
           </div>
           <div class="video-container">
-            <img :src="videoUrl" alt="视频监控" class="video-feed">
-            <div class="video-overlay" v-if="!videoUrl">
+            <img :src="eventBus.videoFeedUrl" alt="视频监控" class="video-feed">
+            <div class="video-overlay" v-if="!eventBus.videoFeedUrl">
               <div class="loading-spinner"></div>
             </div>
           </div>
@@ -60,11 +60,6 @@ const websocket = ref(null)
 // Work duration display
 // const backendWorkDuration = ref(0); // Removed
 const todayWorkDurationMessage = ref('加载中...'); // Added
-
-const videoUrl = computed(() => {
-  if (!eventBus.currentMonitor) return ''
-  return `http://localhost:5173/api/monitor/${encodeMonitorUrl(eventBus.currentMonitor)}/video_feed`
-})
 
 const inactiveTime = computed(() => {
   if (!lastActivityTime.value || isActive.value) return 0
