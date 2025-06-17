@@ -36,7 +36,7 @@ class YoloDetector:
     class DetectionResult():
         person_detected: bool = False
         cup_detected: bool = False
-        annotated_frame: Optional[np.ndarray] = field(default=False, repr=False)
+        boxes: list = field(default_factory=list, repr=False)
     def __init__(self):
         """初始化YOLO检测器"""
         self.model = None
@@ -71,17 +71,16 @@ class YoloDetector:
                 {
                     'person_detected': bool,
                     'cup_detected': bool,
-                    'annotated_frame': 带有检测框的帧
+                    'boxes': [],
                 }
         """
-        annotated_frame = frame.copy()
         
         if self.model is None:
             return self.result
         
         try:
             yolo_result = self.model(frame, verbose=False)[0]  # 一张图片只有一个结果
-            self.result = self.DetectionResult() # 重置结果
+            self.result = self.DetectionResult()  # 重置结果
 
             for box in yolo_result.boxes:
                 if box.conf[0] < 0.5:
@@ -93,25 +92,8 @@ class YoloDetector:
                     self.result.cup_detected = True
                 elif cls == 41:  # cup
                     self.result.cup_detected = True
-
-                # 为所有检测到的对象绘制边界框
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-                conf = float(box.conf[0])
-                cls_id = int(box.cls[0])
-                label = f"{cls} {self.model.names[cls_id]} {conf:.2f}"
-                
-                # 绘制边界框
-                cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                
-                # 绘制标签背景
-                label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
-                cv2.rectangle(annotated_frame, (x1, y1 - label_size[1] - 5), 
-                                (x1 + label_size[0], y1), (0, 255, 0), -1)
-                
-                # 绘制标签文本
-                cv2.putText(annotated_frame, label, (x1, y1 - 5), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            self.result.annotated_frame = annotated_frame
+                self.result.boxes.append(box)
+            
         except Exception as e:
             print(f"YOLO检测出错: {e}")
             traceback.print_exc()

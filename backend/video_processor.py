@@ -52,7 +52,6 @@ class VideoProcessor:
         # 帧相关变量
         self.frame_buffer = []
         self.frame_index = 0
-        self.annotated_frame = None
 
         # 处理控制变量
         self.enable_yolo_processing = True
@@ -70,7 +69,7 @@ class VideoProcessor:
             current_time_ms = int(time.time_ns() / 1_000_000)
 
             # 控制处理频率
-            if current_time_ms - last_processing_time < 1.0 / 5:  # 每秒处理5帧
+            if current_time_ms - last_processing_time < 1.0 / 1:  # 每秒处理5帧
                 time.sleep(0.01)  # 短暂休眠，避免CPU占用过高
                 continue
 
@@ -110,7 +109,6 @@ class VideoProcessor:
                 yolo_start = time.time()
                 # 使用YOLO检测器进行检测
                 self.detection_result = self.yolo_detector.detect(frame)
-                self.annotated_frame = self.detection_result.annotated_frame
 
                 self._update_person_status()
                 self._update_cup_status()
@@ -122,10 +120,6 @@ class VideoProcessor:
                 print(f"[VideoProcessor] YOLO分析出错: {e}")
                 e.with_traceback(traceback.format_exc())
                 log_entry.timing('yolo', -1)
-        else:
-            # 只显示原始帧
-            self.annotated_frame = frame.copy()
-            log_entry.timing('yolo', 0)
 
         # 进行活动检测
         activity_start = time.time()
@@ -203,12 +197,37 @@ class VideoProcessor:
                 self.status.is_cup_detected = False
 
     def get_latest_frame(self):
-        """获取最新的视频帧（用于前端显示，带有检测框）"""
-        # 优先返回带有检测框的显示帧
-        if self.annotated_frame is not None:
-            return self.annotated_frame
-        # 如果没有显示帧，则返回相机原始帧
+        """获取最新的视频帧（无检测框）"""
         frame, _ = self.camera.get_latest_frame()
+        return frame
+    
+    def get_annotated_frame(self):
+        """获取带有带有检测框的注释帧"""
+        frame = self.get_latest_frame()
+        if not hasattr(self, 'detection_result') or not self.enable_yolo_processing:
+            return frame
+        boxes = self.detection_result.boxes if hasattr(self, 'detection_result') else []
+
+        # 为所有检测到的对象绘制边界框
+        for box in boxes:
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+            conf = float(box.conf[0])
+            cls_id = int(box.cls[0])
+            label = f"{cls_id} {self.yolo_detector.model.names[cls_id]} {conf:.2f}"
+
+            # 绘制边界框
+            cv2.rectangle(frame, (x1, y1),
+                            (x2, y2), (0, 255, 0), 2)
+
+            # 绘制标签背景
+            label_size = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
+            cv2.rectangle(frame, (x1, y1 - label_size[1] - 5),
+                            (x1 + label_size[0], y1), (0, 255, 0), -1)
+
+            # 绘制标签文本
+            cv2.putText(frame, label, (x1, y1 - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
         return frame
 
     def set_yolo_processing(self, enable):

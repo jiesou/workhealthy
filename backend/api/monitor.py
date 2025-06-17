@@ -64,7 +64,7 @@ async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(get_mon
 
     async def generate():
         while True:
-            frame = monitor.video_processor.get_latest_frame()
+            frame = monitor.video_processor.get_annotated_frame()
             if frame is not None:
                 # 转换为JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
@@ -73,7 +73,7 @@ async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(get_mon
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
 
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
