@@ -2,7 +2,8 @@ import { reactive } from 'vue'
 
 // 创建一个响应式的事件总线
 const eventBus = reactive({
-  currentMonitor: null,
+  currentMonitor: null, // video_url
+  monitorList: [],
 
   listeners: {},
   emit(event, ...args) {

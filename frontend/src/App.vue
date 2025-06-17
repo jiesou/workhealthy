@@ -12,15 +12,21 @@
               {{ currentCameraDisplay }}
             </button>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="cameraDropdown">
-              <li v-for="camera in cameraList" :key="camera" 
-                  @click="selectCamera(camera)"
-                  :class="{ active: camera === eventBus.currentMonitor }">
+              <li v-for="monitor in eventBus.monitorList" :key="monitor" 
+                  @click="eventBus.currentMonitor = monitor"
+                  :class="{ active: monitor === eventBus.currentMonitor }">
                 <a class="dropdown-item" href="#">
                   <i class="bi bi-camera-video me-2"></i>
-                  {{ camera }}
+                  {{ monitor }}
                 </a>
               </li>
               <li><hr class="dropdown-divider"></li>
+              <li>
+                <router-link class="dropdown-item" to="/monitors-overview">
+                  <i class="bi bi-camera-video me-2"></i>
+                  监控总览
+                </router-link>
+              </li>
               <li @click="refreshCameraList">
                 <a class="dropdown-item" href="#">
                   <i class="bi bi-arrow-clockwise me-2"></i>
@@ -66,7 +72,6 @@ import { useRoute } from 'vue-router'
 import { getMonitorList } from '@/services/api'
 import eventBus from '@/services/eventBus'
 
-const cameraList = ref([])
 const route = useRoute()
 
 const currentCameraDisplay = computed(() => {
@@ -76,18 +81,14 @@ const currentCameraDisplay = computed(() => {
 
 async function loadCameraList() {
   try {
-    cameraList.value = await getMonitorList()
-    if (!eventBus.currentMonitor && cameraList.value.length > 0) {
-      selectCamera(cameraList.value[0])
+    eventBus.monitorList = await getMonitorList()
+    if (!eventBus.currentMonitor && eventBus.monitorList.length > 0) {
+      eventBus.currentMonitor = eventBus.monitorList[0]
     }
-    console.log('摄像头列表加载成功:', cameraList.value)
+    console.log('摄像头列表加载成功:', eventBus.monitorList)
   } catch (error) {
     console.error('加载摄像头列表失败:', error)
   }
-}
-
-function selectCamera(camera) {
-  eventBus.currentMonitor = camera
 }
 
 async function refreshCameraList() {

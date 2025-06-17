@@ -17,6 +17,7 @@ from backend.monitor_registry import MonitorRegistry
 
 # 创建监控注册表
 monitor_registry = MonitorRegistry()
+monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.102")
 monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.100")
 
 # 存储所有连接的 WebSockets 客户端，按 video_url 分组
