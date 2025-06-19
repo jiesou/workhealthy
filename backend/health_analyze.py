@@ -61,9 +61,6 @@ class HealthAnalyze:
         """分析主循环"""
         while self.is_running:
             try:
-                # 获取数据库会话
-                db = next(get_db())
-
                 # current_time = datetime.now() # Removed as no longer directly used for interval checks
 
                 # 更新工作状态
@@ -75,13 +72,6 @@ class HealthAnalyze:
             except Exception as e:
                 print(f"分析过程中出错: {e}")
                 traceback.print_exc()
-            finally:
-                # 确保数据库连接被正确关闭
-                if 'db' in locals():
-                    try:
-                        db.close()
-                    except Exception as e:
-                        print(f"关闭数据库连接时出错: {e}")
 
             # 每秒检查一次
             time.sleep(1)
@@ -97,6 +87,7 @@ class HealthAnalyze:
         try:
             # 如果检测到人，但没有活动的工作会话，则创建新会话
             if is_person_detected and not self.current_working_session_id:
+                print("crud: person detected, starting new working session")
                 session = crud.start_working_session(db, monitor_video_url=self.monitor_video_url) # Pass monitor_video_url
                 self.current_working_session_id = session.id
             # 如果没有检测到人，但有活动的工作会话，则结束会话

@@ -38,7 +38,13 @@
       <StatusCard title="当前功率" :status="currentPowerMessage || '加载中...'" description="工位插座"
         icon="current" :type="currentPowerMessage ? 'success' : 'info'" />
 
-      <StatusCard title="工作时长" :status="todayWorkDurationMessage" description="工作时长" icon="time" type="success" />
+      <StatusCard
+        title="工作时长"
+        :status="status.today_work_duration_message.replace(/\n/g, '<br>')"
+        description="工作时长"
+        icon="time"
+        type="success"
+      />
     </div>
   </div>
 </template>
@@ -61,9 +67,14 @@ const currentPowerMessage = ref('');
 const lastUpdated = ref(null)
 const websocket = ref(null)
 
-// Work duration display
-// const backendWorkDuration = ref(0); // Removed
-const todayWorkDurationMessage = ref('加载中...'); // Added
+const status = ref({
+  today_work_duration_message: '加载中……',
+  person_detected: false,
+  is_active: false,
+  cup_detected: false,
+  current_power_message: '',
+  health_metrics: null
+})
 
 const inactiveTime = computed(() => {
   if (!lastActivityTime.value || isActive.value) return 0
@@ -80,9 +91,6 @@ const sinceCupTime = computed(() => {
 const updateStatus = (status) => {
   // Client-side work duration calculation removed
   personDetected.value = status.person_detected;
-
-  // Update todayWorkDurationMessage from WebSocket status
-  todayWorkDurationMessage.value = status.today_work_duration_message || '---';
 
   // 更新其他状态
   isActive.value = status.is_active
@@ -119,7 +127,8 @@ watch(() => eventBus.currentMonitor, (newCamera) => {
     // 重新连接WebSocket
     websocket.value = connectWebSocket(
       (data) => {
-        updateStatus(data)
+        updateStatus(data);
+        status.value = data;
         lastUpdated.value = new Date().toLocaleTimeString()
       },
       eventBus.currentMonitor

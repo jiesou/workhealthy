@@ -21,6 +21,7 @@ class MonitorRegistry:
         # 创建新的Monitor实例
         self.monitors[video_url] = Monitor(video_url=video_url,
                                            current_sensor_url=current_sensor_url)
+        self.monitors[video_url].start()  # 启动Monitor
         return self # 供链式调用
 
     def start_all(self):

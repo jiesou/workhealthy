@@ -1,9 +1,4 @@
 <template>
-  <div v-if="!currentMonitor" class="text-center py-5">
-    <i class="bi bi-camera-video-off fs-1 text-muted"></i>
-    <p class="mt-2">请先在仪表盘页面选择一个监控摄像头。</p>
-  </div>
-  <div v-else>
     <h1 class="mb-4">工作历史记录</h1>
     
     <div class="card mb-4">
@@ -11,6 +6,7 @@
         <span>每日工作时长</span>
         <div>
           <select v-model="selectedDays" class="form-select form-select-sm" @change="fetchWorkSessionHistoryMethod">
+            <option value="0.042">1小时内</option>
             <option value="7">近7天</option>
             <option value="14">近14天</option>
             <option value="30">近30天</option>
@@ -29,7 +25,7 @@
           <p class="mt-2">暂无历史数据</p>
         </div>
         <div v-else>
-          <canvas ref="chartCanvasRef" height="300"></canvas> <!-- Changed ref name -->
+          <canvas ref="chartCanvasRef" height="300"></canvas>
         </div>
       </div>
     </div>
@@ -71,7 +67,6 @@
         </div>
       </div>
     </div>
-  </div>
 </template>
 
 <script setup>
@@ -81,7 +76,6 @@ import eventBus from '@/services/eventBus';
 import Chart from 'chart.js/auto';
 
 const workSessionsRaw = ref([]);
-const currentMonitor = ref(eventBus.currentCamera || null);
 const loading = ref(true);
 const selectedDays = ref('7'); // Default to 7 days
 const chartCanvasRef = ref(null); // Ref for the canvas element
@@ -93,40 +87,66 @@ const dailyAggregatedData = computed(() => {
   if (!workSessionsRaw.value || workSessionsRaw.value.length === 0) {
     return { labels: [], data: [] };
   }
-  const dailyTotals = {}; // Key: 'YYYY-MM-DD', Value: total duration in seconds
-  workSessionsRaw.value.forEach(session => {
-    if (session.start_time === null || session.start_time === undefined) return;
-    const date = new Date(session.start_time * 1000);
-    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    if (!dailyTotals[dayKey]) {
-      dailyTotals[dayKey] = 0;
-    }
-    dailyTotals[dayKey] += session.duration_seconds || 0;
-  });
+  
+  const isHourlyView = parseFloat(selectedDays.value) < 1;
+  
+  if (isHourlyView) {
+    // 按10分钟间隔聚合数据
+    const minutelyTotals = {}; // Key: 'HH:MM', Value: total duration in seconds
+    workSessionsRaw.value.forEach(session => {
+      if (session.start_time === null || session.start_time === undefined) return;
+      const date = new Date(session.start_time * 1000);
+      const hour = String(date.getHours()).padStart(2, '0');
+      const minute = Math.floor(date.getMinutes() / 10) * 10; // 10分钟间隔
+      const timeKey = `${hour}:${String(minute).padStart(2, '0')}`;
+      if (!minutelyTotals[timeKey]) {
+        minutelyTotals[timeKey] = 0;
+      }
+      minutelyTotals[timeKey] += session.duration_seconds || 0;
+    });
 
-  const labels = Object.keys(dailyTotals).sort(); // Sort dates
-  const data = labels.map(label => parseFloat((dailyTotals[label] / 3600).toFixed(2))); // Convert seconds to hours
+    const labels = Object.keys(minutelyTotals).sort();
+    const data = labels.map(label => parseFloat((minutelyTotals[label] / 60).toFixed(2))); // Convert to minutes
 
-  return { labels, data };
+    return { labels, data };
+  } else {
+    // 原有的按天聚合逻辑
+    const dailyTotals = {};
+    workSessionsRaw.value.forEach(session => {
+      if (session.start_time === null || session.start_time === undefined) return;
+      const date = new Date(session.start_time * 1000);
+      const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      if (!dailyTotals[dayKey]) {
+        dailyTotals[dayKey] = 0;
+      }
+      dailyTotals[dayKey] += session.duration_seconds || 0;
+    });
+
+    const labels = Object.keys(dailyTotals).sort();
+    const data = labels.map(label => parseFloat((dailyTotals[label] / 3600).toFixed(2))); // Convert seconds to hours
+
+    return { labels, data };
+  }
 });
 
 const fetchWorkSessionHistoryMethod = async () => {
   if (!eventBus.currentMonitor) {
     console.log('No monitor selected, skipping fetch for work session history.');
-    workSessionsRaw.value = []; // Clear data if no monitor
+    workSessionsRaw.value = [];
     loading.value = false;
-    initOrUpdateChart(); // Attempt to clear or update chart
+    initOrUpdateChart();
     return;
   }
   loading.value = true;
+  console.log('Fetching work session history for monitor:', eventBus.currentMonitor);
   try {
     const endDateTs = Math.floor(Date.now() / 1000);
-    const startDateTs = endDateTs - (parseInt(selectedDays.value) * 24 * 60 * 60);
+    const startDateTs = endDateTs - Math.floor(parseFloat(selectedDays.value) * 24 * 60 * 60);
     const sessions = await getWorkSessionHistory(eventBus.currentMonitor, startDateTs, endDateTs);
-    workSessionsRaw.value = sessions; // API returns array directly
+    workSessionsRaw.value = sessions;
   } catch (error) {
     console.error('获取工作会话历史数据出错:', error);
-    workSessionsRaw.value = []; // Clear data on error
+    workSessionsRaw.value = [];
   } finally {
     loading.value = false;
     initOrUpdateChart();
@@ -134,33 +154,32 @@ const fetchWorkSessionHistoryMethod = async () => {
 };
 
 const initOrUpdateChart = () => {
-  if (!chartCanvasRef.value) return; // Canvas not ready
+  if (!chartCanvasRef.value) return;
 
   const { labels, data } = dailyAggregatedData.value;
+  const isHourlyView = parseFloat(selectedDays.value) < 1;
 
   if (chartInstance) {
-    chartInstance.destroy(); // Destroy previous instance before creating new one
+    chartInstance.destroy();
   }
 
   if (!labels.length && !data.length && workSessionsRaw.value.length === 0 ) {
-     // if no data at all, don't try to render an empty chart
     return;
   }
 
-
   chartInstance = new Chart(chartCanvasRef.value.getContext('2d'), {
-    type: 'bar', // Changed to bar for better daily representation
+    type: 'bar',
     data: {
       labels: labels,
       datasets: [
         {
-          label: '工作时长 (小时)',
+          label: isHourlyView ? '工作时长 (分钟)' : '工作时长 (小时)',
           data: data,
           borderColor: '#007bff',
           backgroundColor: 'rgba(0, 123, 255, 0.5)',
           borderWidth: 2,
-          borderRadius: 5, // Rounded bars
-          barPercentage: 0.6, // Bar width
+          borderRadius: 5,
+          barPercentage: 0.6,
         }
       ]
     },
@@ -170,7 +189,7 @@ const initOrUpdateChart = () => {
       plugins: {
         title: {
           display: true,
-          text: '每日工作时长趋势',
+          text: isHourlyView ? '每10分钟工作时长趋势' : '每日工作时长趋势',
           font: { size: 16 }
         },
         tooltip: {
@@ -183,14 +202,14 @@ const initOrUpdateChart = () => {
                 label += ': ';
               }
               if (context.parsed.y !== null) {
-                label += context.parsed.y + ' 小时';
+                label += context.parsed.y + (isHourlyView ? ' 分钟' : ' 小时');
               }
               return label;
             }
           }
         },
         legend: {
-          display: true, // Keep legend for clarity
+          display: true,
           position: 'top',
         }
       },
@@ -199,17 +218,17 @@ const initOrUpdateChart = () => {
           beginAtZero: true,
           title: {
             display: true,
-            text: '工作时长 (小时)'
+            text: isHourlyView ? '工作时长 (分钟)' : '工作时长 (小时)'
           },
-          suggestedMax: Math.max(...(data.length > 0 ? data : [8]), 8) // Dynamic max based on data or 8 hours
+          suggestedMax: Math.max(...(data.length > 0 ? data : [isHourlyView ? 60 : 8]), isHourlyView ? 60 : 8)
         },
         x: {
           title: {
             display: true,
-            text: '日期'
+            text: isHourlyView ? '时间' : '日期'
           },
           grid: {
-            display: false // Hide X-axis grid lines for cleaner look
+            display: false
           }
         }
       }
@@ -235,39 +254,11 @@ const formatDuration = (totalSeconds) => {
   return result.trim() || '0s'; // Ensure "0s" if duration is 0
 };
 
-let cameraChangeHandler;
-
-onMounted(() => {
-  // fetchWorkSessionHistoryMethod will be called by the watcher if currentMonitor is already set.
-  // If currentMonitor is null, the v-if in template handles it.
-  // If currentMonitor is set, watcher on currentMonitor will trigger fetch.
-  if (eventBus.currentMonitor) {
+watch(() => eventBus.currentMonitor, () => {
     fetchWorkSessionHistoryMethod();
-  }
-
-  cameraChangeHandler = (newCamera) => {
-    eventBus.currentMonitor = newCamera;
-    // fetchWorkSessionHistoryMethod will be called by the watcher on currentMonitor
-  };
-  eventBus.on('camera-changed', cameraChangeHandler);
-});
-
-onBeforeUnmount(() => {
-  if (cameraChangeHandler) {
-    eventBus.off('camera-changed', cameraChangeHandler);
-  }
-  if (chartInstance) {
-    chartInstance.destroy();
-  }
-});
+}, { immediate: true });
 
 watch(selectedDays, fetchWorkSessionHistoryMethod);
-watch(currentMonitor, (newValue, oldValue) => {
-  if (newValue !== oldValue) { // only fetch if monitor actually changed
-    fetchWorkSessionHistoryMethod();
-  }
-}, { immediate: false }); // immediate: false, as onMounted handles initial if needed
-
 </script>
 
 <style scoped>
