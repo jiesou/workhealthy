@@ -31,7 +31,7 @@ class CurrentCommunicator:
         millis: int
         sta_conn_status: int
         ip: str
-        frequency: float
+        frequency: float | None
         frequency_overall: float
         btn_pressed: bool
         relay_state: int

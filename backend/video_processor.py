@@ -69,7 +69,7 @@ class VideoProcessor:
             current_time_ms = int(time.time_ns() / 1_000_000)
 
             # 控制处理频率
-            if current_time_ms - last_processing_time < 1.0 / 1:  # 每秒处理5帧
+            if current_time_ms - last_processing_time < 1000.0 / 5:  # 每秒处理5帧
                 time.sleep(0.01)  # 短暂休眠，避免CPU占用过高
                 continue
 
@@ -78,7 +78,7 @@ class VideoProcessor:
             # 获取最新帧
             frame, latest_frame_time_ms = self.camera.get_latest_frame()
             if frame is None:
-                time.sleep(0.1)
+                time.sleep(0.01)
                 continue
 
             # 检查帧是否太旧

@@ -17,5 +17,10 @@ class CurrentProcessor:
             if data is None:
                 self.frequency = 0.0
                 continue
+            if data['frequency'] == None:
+                # 可能为 null
+                self.frequency = 0.0
+                self.power = 0.0
+                continue
             self.frequency = data['frequency']
             self.power = data['frequency'] * POWER_RATIO
