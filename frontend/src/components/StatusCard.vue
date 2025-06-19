@@ -46,6 +46,7 @@ export default {
         'bi-activity': this.icon === 'activity',
         'bi-cup-hot': this.icon === 'cup',
         'bi-clock-history': this.icon === 'time',
+        'bi-lightning': this.icon === 'current',
         'text-success': this.type === 'success',
         'text-warning': this.type === 'warning',
         'text-danger': this.type === 'danger',

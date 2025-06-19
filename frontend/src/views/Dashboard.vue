@@ -35,15 +35,18 @@
       <StatusCard title="水杯检测" :status="cupDetected ? '已检测到' : '未检测到'" :description="cupDetected ? '注意补水' : '记得喝水'"
         icon="cup" :type="cupDetected ? 'success' : (sinceCupTime > 60 ? 'warning' : 'info')" />
 
+      <StatusCard title="当前功率" :status="currentPowerMessage || '加载中...'" description="工位插座"
+        icon="current" :type="currentPowerMessage ? 'success' : 'info'" />
+
       <StatusCard title="工作时长" :status="todayWorkDurationMessage" description="工作时长" icon="time" type="success" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { encodeMonitorUrl, connectWebSocket } from '@/services/api'
-import HealthAdvice from '@/components/HealthAdvice.vue'; // Added back
+import { ref, computed, onBeforeUnmount, watch } from 'vue'
+import { connectWebSocket } from '@/services/api'
+import HealthAdvice from '@/components/HealthAdvice.vue';
 import StatusCard from '@/components/StatusCard.vue'
 import eventBus from '@/services/eventBus'
 
@@ -53,7 +56,8 @@ const isActive = ref(false)
 const cupDetected = ref(false)
 const lastCupTime = ref(null)
 const lastActivityTime = ref(null)
-const healthMetrics = ref(null); // Added back
+const healthMetrics = ref(null);
+const currentPowerMessage = ref('');
 const lastUpdated = ref(null)
 const websocket = ref(null)
 
@@ -73,15 +77,12 @@ const sinceCupTime = computed(() => {
 
 // formatSessionWorkDuration computed property removed
 
-// 方法
-// fetchStatus removed
-
 const updateStatus = (status) => {
   // Client-side work duration calculation removed
   personDetected.value = status.person_detected;
 
   // Update todayWorkDurationMessage from WebSocket status
-  todayWorkDurationMessage.value = status.today_work_duration_message || '信息不可用';
+  todayWorkDurationMessage.value = status.today_work_duration_message || '---';
 
   // 更新其他状态
   isActive.value = status.is_active
@@ -99,6 +100,10 @@ const updateStatus = (status) => {
   // Restore healthMetrics update (it will likely remain null as health_metrics is not in output_insights)
   if (status.health_metrics) {
     healthMetrics.value = status.health_metrics;
+  }
+
+  if (status.current_power_message) {
+    currentPowerMessage.value = status.current_power_message;
   }
 }
 
@@ -227,7 +232,7 @@ onBeforeUnmount(() => {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1.5rem;
 }
 

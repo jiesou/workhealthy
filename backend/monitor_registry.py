@@ -12,14 +12,15 @@ class MonitorRegistry:
         # video_url -> Monitor实例
         self.monitors: Dict[str, Monitor] = {}
 
-    def register(self, video_url: str):
+    def register(self, video_url: str, current_sensor_url: Optional[str] = None):
         """注册摄像头"""
         for existing_url in self.monitors.keys():
             if existing_url == video_url:
                 print(f"摄像头 {video_url} 已经注册，跳过重复注册")
                 return
         # 创建新的Monitor实例
-        self.monitors[video_url] = Monitor(video_url=video_url)
+        self.monitors[video_url] = Monitor(video_url=video_url,
+                                           current_sensor_url=current_sensor_url)
         return self # 供链式调用
 
     def start_all(self):

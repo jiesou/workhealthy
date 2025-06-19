@@ -31,7 +31,7 @@ class VideoProcessor:
         is_active: bool = False
         active_time: int = 0
 
-    def __init__(self, video_url="http://localhost:8081/mjpeg"):
+    def __init__(self, video_url: str):
         """
         初始化视频处理器
 

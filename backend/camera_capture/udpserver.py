@@ -138,6 +138,8 @@ class UdpCameraClient():
 
         self.cleanup_buffer()
 
+        print(f"[UdpCamera] 收到分片: frame_index={frame_index}, chunk_index={chunk_index}, chunk_total={chunk_total}")
+
         # 如果收齐了，立即组帧
         if chunk_total - len(self.frame_buffer[frame_index]) <= 0:
             try:
