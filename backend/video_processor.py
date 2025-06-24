@@ -12,11 +12,11 @@ from sympy import det
 from torch import Type
 # 导入摄像头捕获
 from backend.camera_capture import create_camera_capture
-# 导入YOLO检测器
-from backend.yolo_detector import YoloDetector
+# 导入检测器
+from backend.detector.yolo_detector import YoloDetector
+from backend.detector.face_signin import FaceSignin
 # 导入日志记录器
 from backend.logger import ActivityLogger
-
 
 class VideoProcessor:
     """视频处理类，负责从摄像头获取视频流并进行分析"""
@@ -45,6 +45,7 @@ class VideoProcessor:
         print(f"[VideoProcessor] 启动摄像头: {self.camera}")
 
         self.yolo_detector = YoloDetector()
+        self.face_signin = FaceSignin()
         self.logger = ActivityLogger()
 
         self.status = self.DetectionStatus()
@@ -55,8 +56,9 @@ class VideoProcessor:
 
         # 处理控制变量
         self.enable_yolo_processing = True
+        self.enable_face_processing = False
 
-        # 启动视频处理线程"
+        # 启动视频处理线程
         self.processing_thread = threading.Thread(
             target=self._process_video_stream)
         self.processing_thread.daemon = True
@@ -120,6 +122,19 @@ class VideoProcessor:
                 print(f"[VideoProcessor] YOLO分析出错: {e}")
                 e.with_traceback(traceback.format_exc())
                 log_entry.timing('yolo', -1)
+        
+        if self.enable_face_processing:
+            try:
+                face_start = time.time()
+                # 使用人脸签到检测器进行检测
+                self.face_signin.detect(frame)
+                # 记录人脸处理时间
+                log_entry.timing('face', int(
+                    (time.time() - face_start) * 1000))
+            except Exception as e:
+                print(f"[VideoProcessor] 人脸签到分析出错: {e}")
+                e.with_traceback(traceback.format_exc())
+                log_entry.timing('face', -1)
 
         # 进行活动检测
         activity_start = time.time()
@@ -200,36 +215,3 @@ class VideoProcessor:
         """获取最新的视频帧（无检测框）"""
         frame, _ = self.camera.get_latest_frame()
         return frame
-    
-    def get_annotated_frame(self):
-        """获取带有带有检测框的注释帧"""
-        frame = self.get_latest_frame()
-        if not hasattr(self, 'detection_result') or not self.enable_yolo_processing:
-            return frame
-        boxes = self.detection_result.boxes if hasattr(self, 'detection_result') else []
-
-        # 为所有检测到的对象绘制边界框
-        for box in boxes:
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-            conf = float(box.conf[0])
-            cls_id = int(box.cls[0])
-            label = f"{cls_id} {self.yolo_detector.model.names[cls_id]} {conf:.2f}"
-
-            # 绘制边界框
-            cv2.rectangle(frame, (x1, y1),
-                            (x2, y2), (0, 255, 0), 2)
-
-            # 绘制标签背景
-            label_size = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
-            cv2.rectangle(frame, (x1, y1 - label_size[1] - 5),
-                            (x1 + label_size[0], y1), (0, 255, 0), -1)
-
-            # 绘制标签文本
-            cv2.putText(frame, label, (x1, y1 - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        return frame
-
-    def set_yolo_processing(self, enable):
-        """设置是否启用YOLO处理"""
-        self.enable_yolo_processing = enable

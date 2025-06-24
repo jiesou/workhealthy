@@ -1,23 +1,18 @@
 import datetime
 import os
-from pydoc import resolve
 import time
 
-from click import File
-from h11 import Response
-from backend import face_signin
-from backend.face_signin import FaceSignin
-from database import crud, get_db, models # Added models
+from backend.detector.face_signin import FaceSignin
+from database import crud, get_db
 import json
 import asyncio
 import cv2
-from typing import List, Union # Added List
 
 import urllib.parse
 from fastapi.responses import StreamingResponse
-from fastapi import APIRouter, Request, UploadFile, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, Depends
 from fastapi import Depends, HTTPException
-from sqlalchemy.orm import Session # Added Session
+from sqlalchemy.orm import Session
 
 from backend.monitor import Monitor
 from backend.monitor_registry import MonitorRegistry
@@ -75,7 +70,8 @@ async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(decode_
 
     async def generate():
         while True:
-            frame = monitor.video_processor.get_annotated_frame()
+            frame = monitor.video_processor.yolo_detector.result.draw_boxes_on(
+                monitor.video_processor.get_latest_frame())
             if frame is not None:
                 # 转换为JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
@@ -204,13 +200,48 @@ async def do_face_signin(
     user_id: Optional[int] = None,
     monitor_info: tuple[str, Monitor] = Depends(decode_monitor_url)
 ):
-    """
-    人脸签到接口
-    """
     resolved_url, monitor = monitor_info
+
+    monitor.video_processor.enable_face_processing = True  # 启用人脸处理模式
+
+    # 保存签到图片
     os.makedirs(SIGNIN_IMAGES_PATH, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    timestamp = int(time.time())
     image_path = os.path.join(SIGNIN_IMAGES_PATH, f"signin_{timestamp}.jpg")
-    # 获取最新帧并保存
-    cv2.imwrite(image_path, monitor.video_processor.get_latest_frame())
-    return face_signin.signin(user_id, image_path)
+    annotated_frame = monitor.video_processor.get_latest_frame()
+    cv2.imwrite(image_path, annotated_frame)
+
+    # 获取识别结果
+    recognition_result = monitor.video_processor.face_signin.result
+
+    monitor.video_processor.enable_face_processing = False  # 禁用人脸处理模式
+
+    return {
+        "status": "success",
+        "recognized_who": recognition_result.recognized_who,
+        "timestamp": timestamp
+    }
+
+
+@router.get("/{blur_video_url}/video_feed_with_faces")
+async def monitor_video_feed_with_recognition(monitor_info: tuple[str, Monitor] = Depends(decode_monitor_url)):
+    """带人脸识别的视频流"""
+    resolved_url, monitor = monitor_info
+    monitor.video_processor.enable_face_processing = True
+
+    async def generate():
+        try:
+            while True:
+                frame = monitor.video_processor.face_signin.result.draw_boxes_on(
+                    monitor.video_processor.get_latest_frame())
+                if frame is not None:
+                    _, jpeg = cv2.imencode('.jpg', frame)
+                    frame_bytes = jpeg.tobytes()
+                    yield (b'--frame\r\n'
+                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                await asyncio.sleep(0.05)
+        finally:
+            # 可能是连接断开，那就禁用人脸处理
+            monitor.video_processor.enable_face_processing = False
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")

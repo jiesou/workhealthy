@@ -77,7 +77,7 @@ import Chart from 'chart.js/auto';
 
 const workSessionsRaw = ref([]);
 const loading = ref(true);
-const selectedDays = ref('7'); // Default to 7 days
+const selectedDays = ref('0.042'); // Default to 1 hour view
 const chartCanvasRef = ref(null); // Ref for the canvas element
 let chartInstance = null; // To hold the chart instance
 

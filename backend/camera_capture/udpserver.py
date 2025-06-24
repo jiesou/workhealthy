@@ -135,7 +135,7 @@ class UdpCameraClient():
         # 存入缓存（可能乱序，所以直接放进 dict）
         self.frame_buffer[frame_index][chunk_index] = chunk_payload
         self.frame_chunk_count[frame_index] = chunk_total
-
+        # print(f"[UdpCamera] 收到分片: frame_index={frame_index}, chunk_index={chunk_index}, chunk_total={chunk_total}")
         self.cleanup_buffer()
 
         # 如果收齐了，立即组帧
@@ -157,15 +157,27 @@ class UdpCameraClient():
                 self.update_frame_callback(frame)
             else:
                 print("[UdpCamera] JPEG解码失败")
-
+            
             # 清理对应缓存
             del self.frame_buffer[frame_index]
             del self.frame_chunk_count[frame_index]
 
     def cleanup_buffer(self):
-        """清理 buffer"""
-        # 只保留最近5帧的buffer，防止内存泄漏
-        while len(self.frame_buffer) > 5:
-            key = next(iter(self.frame_buffer))
-            self.frame_buffer.pop(key, None)
-            self.frame_chunk_count.pop(key, None)
+        """清理 buffer - 只删除超时或不可能完成的帧"""
+        current_time = time.time()
+
+        # 获取当前最新的帧索引
+        if not self.frame_buffer:
+            return
+
+        max_frame_id = max(self.frame_buffer.keys())
+
+        # 删除明显过时的帧（比最新帧旧超过5帧的）
+        frames_to_remove = []
+        for frame_id in self.frame_buffer.keys():
+            if max_frame_id - frame_id > 5:
+                frames_to_remove.append(frame_id)
+
+        for frame_id in frames_to_remove:
+            self.frame_buffer.pop(frame_id, None)
+            self.frame_chunk_count.pop(frame_id, None)
