@@ -50,7 +50,7 @@ class FaceSignin:
             pickle.dump((encodings, names), f)
         return encodings, names
 
-    def detect(self, frame) -> FaceResult:
+    async def detect(self, frame) -> FaceResult:
         """检测图像中的人脸，并返回结果（包含 box）"""
         result = self.FaceResult()
 
@@ -91,6 +91,11 @@ class FaceSignin:
                 class_id=class_id,
                 class_name=result.recognized_who
             ))
+
+        # 检测工牌
+        self.work_label_detector.detect(frame)
+        result.has_work_label = self.work_label_detector.result.has_work_label
+        result.boxes.extend(self.work_label_detector.result.boxes)
 
         self.result = result
         return result

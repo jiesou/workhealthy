@@ -7,10 +7,8 @@ from backend.detector import BaseDetectionResult, DetectionBox
 try:
     print("尝试导入 Roboflow Inference 模块...")
     from inference import get_model
-    import cv2
 except ImportError:
     print("警告: 无法导入 inference，工牌检测功能可能不可用")
-    get_model = None
 
 
 class WorkLabel:
@@ -21,21 +19,19 @@ class WorkLabel:
 
     def __init__(self):
         """初始化工牌检测器"""
-        self.model = None
         self.result = self.WorkLabelResult()
+        # try:
+        # 确保环境变量中有 API key
+        if not os.getenv('ROBOFLOW_API_KEY'):
+            print("警告: 未设置 ROBOFLOW_API_KEY 环境变量")
+            return
 
-        try:
-            # 确保环境变量中有 API key
-            if not os.getenv('ROBOFLOW_API_KEY'):
-                print("警告: 未设置 ROBOFLOW_API_KEY 环境变量")
-                return
-
-            # 加载您的私有模型
-            self.model = get_model(model_id="jiesou/-hdl2k-instant-2")
-            print("Roboflow 工牌检测模型加载成功")
-        except Exception as e:
-            print(f"加载 Roboflow 模型出错: {e}")
-            print("工牌检测功能将不可用")
+        # 加载您的私有模型
+        self.model = get_model(model_id="jiesou/-hdl2k-instant-2")
+        print("Roboflow 工牌检测模型加载成功")
+        # except Exception as e:
+        #     print(f"加载 Roboflow 模型出错: {e}")
+        #     print("工牌检测功能将不可用")
 
     def detect(self, frame) -> WorkLabelResult:
         """检测图像中的工牌，并返回结果（包含 box）"""
@@ -48,7 +44,7 @@ class WorkLabel:
         try:
             # 使用 Roboflow 模型进行推理
             results = self.model.infer(frame)[0]
-
+            print(f"[WorkLabel] 检测到 {len(results.predictions)} 个工牌候选")
             # 处理检测结果
             if hasattr(results, 'predictions') and results.predictions:
                 for prediction in results.predictions:
