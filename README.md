@@ -1,136 +1,82 @@
-# 工位健康检测系统
+# WorkHealthy - Office Health Monitoring System
 
-这是一个使用计算机视觉和人工智能技术来监测工位健康状况的系统。系统通过摄像头采集视频，分析工人的工作姿态、活动频率和饮水习惯，提供实时健康状态反馈和建议。
+[简体中文](README.zh.md)
 
-## 系统架构
+A comprehensive office worker health monitoring system using computer vision (YOLO) and LLM to monitor workplace health status. It's like a real-world "screen time" tracker that provides real-time health feedback and recommendations based on workers' posture, activity patterns, and hydration habits.
 
-系统由三个主要部分组成：
+## Features
 
-1. **前端** - 基于Vue.js的用户界面，提供实时监控视图和数据可视化
-2. **后端** - 基于FastAPI的Python后端服务，处理视频分析和健康监测
-3. **视频代理** - 独立的视频流处理服务，负责视频采集和分发
+- **Real-time Health Monitoring**: Tracks posture, activity frequency, and hydration habits, with companion smart sockets for power consumption tracking (smart socket is from an existing project, not yet fully open-sourced)
+- **Multi-camera Support**: One host computer can connect to multiple embedded devices simultaneously
+- **AI-powered Analysis**: Uses YOLO computer vision models for person detection and activity analysis
+- **LLM Integration**: Provides intelligent health recommendations and insights
+- **Real-time Feedback**: WebSocket-based real-time communication and updates
+- **Embedded Interfaces**: LVGL-based user interfaces on ESP32 devices
+- **USB Streaming**: Uses usb_stream for USB camera support with UDP self-assembled packets for high-performance video transmission
 
-### 视频代理服务器
+## System Architecture
 
-视频代理服务器是一个独立的组件，用于：
+The system consists of two main components:
 
-- 从摄像头或网络视频流获取视频帧
-- 提供MJPEG流和单帧API
-- 支持多客户端连接
-- 通过Web界面管理视频源
-- 完全分离视频采集和YOLO处理，避免资源竞争
+### Host Computer (上位机)
+- **Frontend**: Vue.js application with partial use of Three.js and TresJS for 3D visualization
+- **Backend**: FastAPI with SQLite database
+- **Video Processing**: Real-time YOLO model inference (YOLOv8, YOLO11)
+- **Health Analysis**: Intelligent monitoring and recommendation engine
+- **Multi-stream Support**: Handles multiple camera feeds simultaneously
 
-这种架构设计能够有效解决视频处理和显示之间的资源竞争问题。
+### Embedded Devices (下位机)
+Two firmware versions supporting different ESP32 boards:
 
-## 安装
+1. **ESP32-S3-LCD-EV-Board v1.5**: Advanced version with LCD display and LVGL interface
+2. **ESP-CAM**: Compact camera-only version
 
-### 环境要求
+Both firmwares feature:
+- PlatformIO Arduino/FreeRTOS development
+- USB streaming using usb_stream library
+- WebSocket communication with host computer
+- Real-time video transmission
 
-- Python 3.8+
-- Node.js 14+
-- 摄像头（本地USB摄像头或网络摄像头）
+## Hardware Requirements
 
-### 依赖安装
+### Host Computer
+- Docker
 
-1. 克隆仓库：
+### Embedded Devices
+- **ESP32-S3-LCD-EV-Board v1.5** OR **ESP-CAM**
+- USB cable for connection and power
+- Camera module (integrated in both boards)
 
-```bash
-git clone https://github.com/yourusername/workhealthy.git
-cd workhealthy
-```
+## Installation
 
-2. 创建Python虚拟环境并安装依赖：
+Use devcontainer
 
-```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# Linux/Mac
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+Frontend dependencies can be installed with `yarn`
 
-3. 安装前端依赖：
+Backend requires editing `.env.example`
 
-```bash
-cd frontend
-npm install
-cd ..
-```
+Edit [`api/monitor.py`](https://github.com/jiesou/workhealthy/blob/d3066bf7cae3a1f2b7ac972445f81eb29522e923/backend/api/monitor.py#L22-L23) to register required embedded cameras. The `current_sensor_url` parameter is for connecting the non-open-source smart socket and can be left blank.
 
-## 配置
+Then run `python main.py` to start
 
-1. 复制环境变量示例文件：
+### Access the Application
+- **Frontend Interface**: http://localhost:5173
+- **Backend API**: http://localhost:8000
 
-```bash
-cp env.example .env
-```
+## Embedded Firmware Flashing
 
-2. 根据需要修改`.env`文件中的配置：
+1. Switch to the corresponding directory's `.code-workspace` (required, otherwise PlatformIO won't recognize the project)
 
-```
-# 服务器配置
-HOST=0.0.0.0
-PORT=8000
-RELOAD=True
+2. Edit host computer related information:
 
-# 视频配置
-VIDEO_PROXY_HOST=0.0.0.0
-VIDEO_PROXY_PORT=8081
-VIDEO_URL=http://0.0.0.0:8081/mjpeg
-```
+- Video streaming: [UDP_SERVER_IP](https://github.com/jiesou/workhealthy/blob/d3066bf7cae3a1f2b7ac972445f81eb29522e923/firmware-esp-lcd-ev/src/udp_client.cpp#L9C9-L9C22)
+- WebSocket: [WS_SERVER_HOST](https://github.com/jiesou/workhealthy/blob/d3066bf7cae3a1f2b7ac972445f81eb29522e923/firmware-esp-lcd-ev/src/wsclient.cpp#L4)
+- WiFi (MCU as STA, requires external AP): [ssid/password](https://github.com/jiesou/workhealthy/blob/d3066bf7cae3a1f2b7ac972445f81eb29522e923/firmware-esp-lcd-ev/src/main.cpp#L24)
 
-## 运行
+3. Build, then run `pio run --target upload`
 
-### 一键启动（推荐）
-
-使用一键启动脚本同时启动视频代理、后端和前端服务：
-
-```bash
-python start_all.py
-```
-
-### 分别启动
-
-1. 启动视频代理服务器：
-
-```bash
-python video_proxy.py
-```
-
-2. 启动后端服务：
-
-```bash
-python main.py
-```
-
-3. 启动前端服务：
-
-```bash
-cd frontend
-npm run dev
-```
-
-## 使用说明
-
-1. 访问前端界面：http://0.0.0.0:5173
-2. 在"设置"页面配置视频源和检测参数
-3. 在"实时监控"页面查看健康监测结果
-4. 视频代理服务器入口页面：http://0.0.0.0:8081
-
-## 系统功能
-
-- 人体检测：检测工位是否有人
-- 活动监测：分析工人活动频率
-- 水杯检测：提醒适时饮水
-- 工作时长统计：防止久坐不动
-
-## 故障排除
-
-- **视频流不显示**：检查视频代理服务器是否正常运行，访问 http://0.0.0.0:8081/mjpeg 确认
-- **分析结果不更新**：检查后端API是否正常，访问 http://0.0.0.0:8000/status
-- **前端加载失败**：检查Node.js环境和依赖是否正确安装
-
-## 许可证
-
-该项目采用MIT许可证 
+### Architecture Principles
+- **Fat Server Strategy**: Frontend-backend communication core is [`insights`](https://github.com/jiesou/workhealthy/blob/d3066bf7cae3a1f2b7ac972445f81eb29522e923/backend/monitor.py#L52-L102) in websocket. Backend generates complete insights messages directly, frontend should not dynamically update data
+- **No Over-engineering**: Keep code implementation short and simple, reduce code changes if possible
+- **Multi-camera Support**: Pay special attention to supporting multiple cameras (multiple monitor.py instances)
+- **Unified Time Format**: For better operation on embedded devices, time data type uniformly uses time.time() converted to int second-level timestamps, not datetime 
