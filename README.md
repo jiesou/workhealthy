@@ -1,136 +1,249 @@
-# 工位健康检测系统
+# WorkHealthy - Office Health Monitoring System
 
-这是一个使用计算机视觉和人工智能技术来监测工位健康状况的系统。系统通过摄像头采集视频，分析工人的工作姿态、活动频率和饮水习惯，提供实时健康状态反馈和建议。
+A comprehensive office worker health monitoring system using computer vision (YOLO) and LLM to monitor workplace health status. It's like a real-world "screen time" tracker that provides real-time health feedback and recommendations based on workers' posture, activity patterns, and hydration habits.
 
-## 系统架构
+## 🎯 Features
 
-系统由三个主要部分组成：
+- **Real-time Health Monitoring**: Tracks posture, activity frequency, and hydration habits
+- **Multi-camera Support**: One host computer can connect to multiple embedded devices simultaneously
+- **AI-powered Analysis**: Uses YOLO computer vision models for person detection and activity analysis
+- **LLM Integration**: Provides intelligent health recommendations and insights
+- **Real-time Feedback**: WebSocket-based real-time communication and updates
+- **Embedded Interfaces**: LVGL-based user interfaces on ESP32 devices
+- **USB Streaming**: High-performance video transmission using usb_stream library
 
-1. **前端** - 基于Vue.js的用户界面，提供实时监控视图和数据可视化
-2. **后端** - 基于FastAPI的Python后端服务，处理视频分析和健康监测
-3. **视频代理** - 独立的视频流处理服务，负责视频采集和分发
+## 🏗️ System Architecture
 
-### 视频代理服务器
+The system consists of two main components:
 
-视频代理服务器是一个独立的组件，用于：
+### Host Computer (上位机)
+- **Frontend**: Vue.js application with 3D visualization using Three.js and TresJS
+- **Backend**: FastAPI with SQLite database
+- **Video Processing**: Real-time YOLO model inference (YOLOv8, YOLO11)
+- **Health Analysis**: Intelligent monitoring and recommendation engine
+- **Multi-stream Support**: Handles multiple camera feeds simultaneously
 
-- 从摄像头或网络视频流获取视频帧
-- 提供MJPEG流和单帧API
-- 支持多客户端连接
-- 通过Web界面管理视频源
-- 完全分离视频采集和YOLO处理，避免资源竞争
+### Embedded Devices (下位机)
+Two firmware versions supporting different ESP32 boards:
 
-这种架构设计能够有效解决视频处理和显示之间的资源竞争问题。
+1. **ESP32-S3-LCD-EV-Board v1.5**: Advanced version with LCD display and LVGL interface
+2. **ESP-CAM**: Compact camera-only version
 
-## 安装
+Both firmwares feature:
+- PlatformIO Arduino/FreeRTOS development
+- USB streaming using usb_stream library
+- WebSocket communication with host computer
+- Real-time video transmission
 
-### 环境要求
+## 🔧 Hardware Requirements
 
+### Host Computer
 - Python 3.8+
 - Node.js 14+
-- 摄像头（本地USB摄像头或网络摄像头）
+- USB ports for connecting embedded devices
+- GPU recommended for faster YOLO inference
 
-### 依赖安装
+### Embedded Devices
+- **ESP32-S3-LCD-EV-Board v1.5** OR **ESP-CAM**
+- USB cable for connection and power
+- Camera module (integrated in both boards)
 
-1. 克隆仓库：
+## 📦 Installation
 
+### 1. Clone Repository
 ```bash
-git clone https://github.com/yourusername/workhealthy.git
+git clone https://github.com/jiesou/workhealthy.git
 cd workhealthy
 ```
 
-2. 创建Python虚拟环境并安装依赖：
-
+### 2. Setup Python Environment
 ```bash
 python -m venv .venv
+
 # Windows
 .venv\Scripts\activate
-# Linux/Mac
+
+# Linux/macOS
 source .venv/bin/activate
+
 pip install -r requirements.txt
 ```
 
-3. 安装前端依赖：
-
+### 3. Setup Frontend Dependencies
 ```bash
 cd frontend
 npm install
 cd ..
 ```
 
-## 配置
-
-1. 复制环境变量示例文件：
-
+### 4. Configure Environment
 ```bash
 cp env.example .env
 ```
 
-2. 根据需要修改`.env`文件中的配置：
-
-```
-# 服务器配置
+Edit `.env` file according to your setup:
+```env
+# Server Configuration
 HOST=0.0.0.0
 PORT=8000
 RELOAD=True
 
-# 视频配置
+# Video Configuration
 VIDEO_PROXY_HOST=0.0.0.0
 VIDEO_PROXY_PORT=8081
 VIDEO_URL=http://0.0.0.0:8081/mjpeg
 ```
 
-## 运行
+## 🚀 Quick Start
 
-### 一键启动（推荐）
-
-使用一键启动脚本同时启动视频代理、后端和前端服务：
-
+### One-click Startup (Recommended)
 ```bash
 python start_all.py
 ```
 
-### 分别启动
+This will automatically start:
+- Video proxy server (Port 8081)
+- Backend API server (Port 8000)
+- Frontend development server (Port 5173)
+- Web browser pointing to the application
 
-1. 启动视频代理服务器：
+### Manual Startup
 
+1. **Start Video Proxy Server**:
 ```bash
-python video_proxy.py
+python video_proxy_async.py --source http://192.168.4.1:81/stream
 ```
 
-2. 启动后端服务：
-
+2. **Start Backend Server**:
 ```bash
 python main.py
 ```
 
-3. 启动前端服务：
-
+3. **Start Frontend Server**:
 ```bash
 cd frontend
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
 
-## 使用说明
+### Access the Application
+- **Frontend Interface**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **Video Proxy**: http://localhost:8081
 
-1. 访问前端界面：http://0.0.0.0:5173
-2. 在"设置"页面配置视频源和检测参数
-3. 在"实时监控"页面查看健康监测结果
-4. 视频代理服务器入口页面：http://0.0.0.0:8081
+## 🔌 Embedded Device Setup
 
-## 系统功能
+### ESP32-S3-LCD-EV-Board v1.5
 
-- 人体检测：检测工位是否有人
-- 活动监测：分析工人活动频率
-- 水杯检测：提醒适时饮水
-- 工作时长统计：防止久坐不动
+1. Install PlatformIO IDE or CLI
+2. Navigate to firmware directory:
+```bash
+cd firmware-esp-lcd-ev
+```
+3. Build and upload:
+```bash
+pio run --target upload
+```
 
-## 故障排除
+### ESP-CAM
 
-- **视频流不显示**：检查视频代理服务器是否正常运行，访问 http://0.0.0.0:8081/mjpeg 确认
-- **分析结果不更新**：检查后端API是否正常，访问 http://0.0.0.0:8000/status
-- **前端加载失败**：检查Node.js环境和依赖是否正确安装
+1. Navigate to firmware directory:
+```bash
+cd firmware-esp-cam
+```
+2. Build and upload:
+```bash
+pio run --target upload
+```
 
-## 许可证
+## 💡 Usage
 
-该项目采用MIT许可证 
+1. **Setup**: Connect your ESP32 device(s) to the host computer via USB
+2. **Configuration**: Access the settings page to configure video sources and detection parameters
+3. **Monitoring**: View real-time health monitoring results on the dashboard
+4. **Multi-device**: Add additional ESP32 devices for multi-angle monitoring
+
+## 🔍 System Components
+
+### Backend Services
+- **Monitor Registry**: Manages multiple camera instances
+- **Video Processor**: Handles video stream processing and YOLO inference
+- **Health Analyzer**: Analyzes worker behavior and generates insights
+- **Generator Service**: Creates health recommendations using LLM
+- **Current Processor**: Handles sensor data from embedded devices
+
+### Frontend Features
+- **Real-time Dashboard**: Live health monitoring display
+- **3D Visualization**: Interactive 3D interface using Three.js
+- **Multi-camera View**: Simultaneous monitoring of multiple workstations
+- **Health Analytics**: Historical data visualization and trends
+- **Settings Panel**: Configuration management for devices and parameters
+
+### Embedded Features
+- **LVGL Interface**: Touch-friendly user interface on LCD displays
+- **USB Streaming**: High-performance video transmission
+- **WebSocket Client**: Real-time communication with host computer
+- **Low Power Design**: Optimized for continuous operation
+
+## 🛠️ Development
+
+### Architecture Principles
+- **Fat Server Strategy**: Backend generates complete insights messages; frontend displays without dynamic data manipulation
+- **No Over-engineering**: Keep implementations simple and concise
+- **Multi-camera Awareness**: Special attention to supporting multiple monitor.py instances
+- **Unified Time Format**: Use Unix timestamps (time.time() converted to int) for embedded compatibility
+
+### Project Structure
+```
+workhealthy/
+├── backend/              # FastAPI backend services
+├── frontend/             # Vue.js frontend application
+├── firmware-esp-lcd-ev/  # ESP32-S3-LCD-EV-Board firmware
+├── firmware-esp-cam/     # ESP-CAM firmware
+├── database/             # SQLite database utilities
+├── start_all.py          # One-click startup script
+├── video_proxy_async.py  # Async video proxy server
+└── requirements.txt      # Python dependencies
+```
+
+## 📊 Health Monitoring Features
+
+- **Person Detection**: Detects presence at workstation
+- **Activity Monitoring**: Analyzes movement patterns and frequency
+- **Posture Analysis**: Monitors sitting posture and positioning
+- **Hydration Tracking**: Detects drinking habits and reminds for water breaks
+- **Work Duration**: Tracks continuous work periods to prevent prolonged sitting
+- **Break Reminders**: Intelligent suggestions for rest and movement
+
+## 🐛 Troubleshooting
+
+### Video Stream Issues
+- Check if video proxy server is running: http://localhost:8081/mjpeg
+- Verify ESP32 device is connected and streaming
+- Check USB cable and connection stability
+
+### Backend Issues
+- Verify backend API is responding: http://localhost:8000/status
+- Check Python dependencies are installed correctly
+- Review console output for error messages
+
+### Frontend Issues
+- Ensure Node.js and npm are installed correctly
+- Check if all frontend dependencies are installed
+- Verify browser supports WebSocket connections
+
+### Embedded Device Issues
+- Check PlatformIO installation and board configuration
+- Verify correct board selection in platformio.ini
+- Monitor serial output for debugging information
+
+## 📄 License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📞 Support
+
+For support and questions, please open an issue on GitHub. 
