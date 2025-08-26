@@ -50,7 +50,7 @@ class FaceSignin:
             pickle.dump((encodings, names), f)
         return encodings, names
 
-    async def detect(self, frame) -> FaceResult:
+    def detect(self, frame) -> FaceResult:
         """检测图像中的人脸，并返回结果（包含 box）"""
         result = self.FaceResult()
 
@@ -60,6 +60,7 @@ class FaceSignin:
         # 检测人脸位置和编码
         face_locations = face_recognition.face_locations(frame)
         face_encodings = face_recognition.face_encodings(frame, face_locations)
+        print(f"[FaceSignin] 检测到 {len(face_locations)} 张人脸")
 
         for face_encoding, (top, right, bottom, left) in zip(face_encodings, face_locations):
             print(
@@ -93,9 +94,9 @@ class FaceSignin:
             ))
 
         # 检测工牌
-        self.work_label_detector.detect(frame)
-        result.has_work_label = self.work_label_detector.result.has_work_label
-        result.boxes.extend(self.work_label_detector.result.boxes)
+        # self.work_label_detector.detect(frame)
+        # result.has_work_label = self.work_label_detector.result.has_work_label
+        # result.boxes.extend(self.work_label_detector.result.boxes)
 
         self.result = result
         return result
