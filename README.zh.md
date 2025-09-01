@@ -55,6 +55,14 @@
 
 编辑 [`api/monitor.py`](https://github.com/jiesou/workhealthy/blob/d3066bf7cae3a1f2b7ac972445f81eb29522e923/backend/api/monitor.py#L22-L23) 注册所需的下位机摄像头。`current_sensor_url` 参数是连接未开源的 智能插座 的，可以不写
 
+运行
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+在 devcontainer 的 venv 中安装 pip 依赖
+
 然后 `python main.py` 来启动
 
 ### 访问应用

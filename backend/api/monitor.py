@@ -2,7 +2,6 @@ import datetime
 import os
 import time
 
-from backend.detector.face_signin import FaceSignin
 from database import crud, get_db
 import json
 import asyncio
@@ -69,8 +68,11 @@ async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(decode_
 
     async def generate():
         while True:
-            frame = monitor.video_processor.yolo_detector.result.draw_boxes_on(
-                monitor.video_processor.get_latest_frame())
+            if monitor.video_processor.yolo_detector is not None:
+                frame = monitor.video_processor.yolo_detector.result.draw_boxes_on(
+                    monitor.video_processor.get_latest_frame())
+            else:
+                frame = monitor.video_processor.get_latest_frame()
             if frame is not None:
                 # 转换为JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
@@ -193,7 +195,6 @@ async def get_monitor_work_session_history(
     return sessions
 
 SIGNIN_IMAGES_PATH = "backend/signin_images"
-face_signin = FaceSignin()
 @router.post("/{blur_video_url}/face_signin")
 async def do_face_signin(
     user_id: Optional[int] = None,
@@ -231,8 +232,11 @@ async def monitor_video_feed_with_recognition(monitor_info: tuple[str, Monitor] 
     async def generate():
         try:
             while True:
-                frame = monitor.video_processor.face_signin.result.draw_boxes_on(
-                    monitor.video_processor.get_latest_frame())
+                if monitor.video_processor.face_signin is not None:
+                    frame = monitor.video_processor.face_signin.result.draw_boxes_on(
+                        monitor.video_processor.get_latest_frame())
+                else:
+                    frame = monitor.video_processor.get_latest_frame()
                 if frame is not None:
                     _, jpeg = cv2.imencode('.jpg', frame)
                     frame_bytes = jpeg.tobytes()

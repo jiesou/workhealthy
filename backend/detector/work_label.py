@@ -8,8 +8,6 @@ from backend.detector import BaseDetectionResult, DetectionBox
 try:
     print("[WorkLabel] 尝试导入 Roboflow Inference 模块...")
     from inference import get_model
-    from inference.models.owlv2.owlv2 import OwlV2
-    from inference.core.entities.requests.owlv2 import OwlV2InferenceRequest
 except ImportError:
     print("[WorkLabel] 警告: 无法导入 inference，工牌检测功能可能不可用")
 
@@ -30,7 +28,7 @@ class WorkLabel:
                 return
 
             # 加载您的私有模型
-            self.model = get_model(model_id="jiesou/-hdl2k-instant-2")
+            self.model = get_model(model_id="-hdl2k/6")
             print("[WorkLabel] Roboflow 工牌检测模型加载成功")
         except KeyError as e:
             print(f"[WorkLabel] Roboflow 模型类型不支持: {e}")

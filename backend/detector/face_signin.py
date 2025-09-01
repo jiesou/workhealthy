@@ -94,9 +94,9 @@ class FaceSignin:
             ))
 
         # 检测工牌
-        # self.work_label_detector.detect(frame)
-        # result.has_work_label = self.work_label_detector.result.has_work_label
-        # result.boxes.extend(self.work_label_detector.result.boxes)
+        self.work_label_detector.detect(frame)
+        result.has_work_label = self.work_label_detector.result.has_work_label
+        result.boxes.extend(self.work_label_detector.result.boxes)
 
         self.result = result
         return result
