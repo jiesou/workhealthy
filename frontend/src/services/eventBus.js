@@ -8,6 +8,10 @@ const eventBus = reactive({
     if (!eventBus.currentMonitor) return ''
     return `http://localhost:5173/api/monitor/${encodeMonitorUrl(eventBus.currentMonitor)}/video_feed`
   }),
+  videoFeedWithFacesUrl: computed(() => {
+    if (!eventBus.videoFeedUrl) return ''
+    return `${eventBus.videoFeedUrl}_with_faces`
+  }),
   monitorList: [],
 })
 

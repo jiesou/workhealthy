@@ -1,10 +1,12 @@
 from dataclasses import dataclass, field
 import os
 import pickle
+import re
 import face_recognition
 import numpy as np
 from backend.detector import BaseDetectionResult, DetectionBox
 from backend.detector.work_label import WorkLabel
+import multiprocessing
 
 NEW_FACE_IMAGES_DIR = "backend/new_face_images"
 ENCODINGS_PATH = "backend/facedata_encodings.pkl"
@@ -50,12 +52,13 @@ class FaceSignin:
             pickle.dump((encodings, names), f)
         return encodings, names
 
-    def detect(self, frame) -> FaceResult:
-        """检测图像中的人脸，并返回结果（包含 box）"""
+    def detect_faces(self, frame, queue: multiprocessing.Queue):
+        """并行执行人脸检测，并返回结果（包含box）"""
         result = self.FaceResult()
 
         if not self.KNOWN_ENCODINGS:
-            return result
+            queue.put(result)
+            return
 
         # 检测人脸位置和编码
         face_locations = face_recognition.face_locations(frame)
@@ -76,7 +79,7 @@ class FaceSignin:
                 f"[FaceSignin] 识别结果: min_distance={min_distance:.3f}, person={self.KNOWN_NAMES[min_index]}")
 
             # 设置阈值
-            THRESHOLD = 0.5
+            THRESHOLD = 0.4
             if min_distance < THRESHOLD:
                 result.recognized_who = self.KNOWN_NAMES[min_index]
                 confidence = (1 - min_distance) * 100  # 转换为百分比
@@ -93,10 +96,44 @@ class FaceSignin:
                 class_name=result.recognized_who
             ))
 
-        # 检测工牌
-        self.work_label_detector.detect(frame)
-        result.has_work_label = self.work_label_detector.result.has_work_label
-        result.boxes.extend(self.work_label_detector.result.boxes)
+        queue.put(result)
+
+    def detect_work_label(self, frame, queue: multiprocessing.Queue):
+        """并行执行工牌检测"""
+        work_label_result = self.work_label_detector.detect(frame)
+        queue.put(work_label_result)
+
+    def detect(self, frame) -> FaceResult:
+        """检测图像中的人脸和工牌，并返回结果（包含 box），使用并行处理"""
+        result = self.FaceResult()
+
+        if not self.KNOWN_ENCODINGS:
+            return result
+
+        # 使用 multiprocessing.Queue 来传递结果
+        queue = multiprocessing.Queue()
+
+        # 创建两个进程：一个用于人脸检测，一个用于工牌检测
+        face_process = multiprocessing.Process(target=self.detect_faces, args=(frame, queue))
+        work_label_process = multiprocessing.Process(target=self.detect_work_label, args=(frame, queue))
+
+        # 启动进程
+        face_process.start()
+        work_label_process.start()
+
+        # 等待进程完成
+        face_process.join()
+        work_label_process.join()
+
+        # 从队列中获取结果
+        face_result = queue.get()
+        work_label_result = queue.get()
+
+        # 合并结果
+        result.recognized_who = face_result.recognized_who
+        result.has_work_label = work_label_result.has_work_label
+        result.boxes.extend(face_result.boxes)
+        result.boxes.extend(work_label_result.boxes)
 
         self.result = result
         return result

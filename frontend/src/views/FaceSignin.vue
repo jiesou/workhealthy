@@ -5,8 +5,8 @@
       <div class="card-header">视频流预览</div>
       <div class="card-body text-center">
         <div class="video-container">
-          <img :src="eventBus.videoFeedUrl" alt="视频监控" class="video-feed">
-          <div class="video-overlay" v-if="!eventBus.videoFeedUrl">
+          <img :src="eventBus.videoFeedWithFacesUrl" alt="视频监控" class="video-feed">
+          <div class="video-overlay" v-if="!eventBus.videoFeedWithFacesUrl">
             <div class="loading-spinner"></div>
           </div>
         </div>

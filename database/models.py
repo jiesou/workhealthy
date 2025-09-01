@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, create_engine
+import time
+from sqlalchemy import Column, Integer, String, Boolean, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -25,10 +26,10 @@ class SigninRecord(Base):
     __tablename__ = "signin_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=True)  # 识别到的姓名
-    timestamp = Column(DateTime, default=datetime.now)
-    image_path = Column(String, nullable=False)  # 签到图片保存路径
-    result = Column(String, nullable=False)  # 签到结果描述
+    timestamp = Column(Integer, default=int(time.time()))
+    name = Column(String, nullable=False)  # 识别到的姓名
+    has_work_label = Column(Boolean, default=False)  # 是否有带工牌
+    image_path = Column(String, nullable=False)  # 签到图片，格式为 "signin_{timestamp}.jpg"，使用时需要拼接 SIGNIN_IMAGES_PATH
     
 # 创建数据库表
 def create_tables():

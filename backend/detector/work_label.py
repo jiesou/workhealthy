@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 import os
 import traceback
+
+import numpy as np
 from backend.detector import BaseDetectionResult, DetectionBox
 
 
@@ -11,7 +13,7 @@ try:
 except ImportError:
     print("[WorkLabel] 警告: 无法导入 inference，工牌检测功能可能不可用")
 
-
+THRESHOLD = 0.4
 class WorkLabel:
     """负责检测有没有佩戴工牌，并提供框框"""
     @dataclass
@@ -37,7 +39,7 @@ class WorkLabel:
         except Exception as e:
             print(f"[WorkLabel] 加载 Roboflow 模型出错: {e}，工牌检测功能将不可用")
 
-    def detect(self, frame) -> WorkLabelResult:
+    def detect(self, frame: np.ndarray) -> WorkLabelResult:
         """检测图像中的工牌，并返回结果（包含 box）"""
         result = self.WorkLabelResult()
 
@@ -53,7 +55,7 @@ class WorkLabel:
             if hasattr(results, 'predictions') and results.predictions:
                 for prediction in results.predictions:
                     # 检查置信度阈值
-                    if prediction.confidence < 0.5:
+                    if prediction.confidence < THRESHOLD:
                         continue
 
                     # 标记检测到工牌

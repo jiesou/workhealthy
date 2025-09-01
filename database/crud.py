@@ -1,3 +1,5 @@
+from os import times
+from attr import has
 from sqlalchemy.orm import Session
 from datetime import datetime # Removed timedelta, kept datetime
 import time # Added time
@@ -57,9 +59,12 @@ def get_work_sessions_for_period(db: Session, monitor_video_url: str, start_date
         models.WorkingSession.start_time <= end_date_ts
     ).order_by(models.WorkingSession.start_time).all()
 
-def create_signin_record(db: Session, name: str, image_path: str, result: str):
+def create_signin_record(db: Session, name: str, has_work_label: bool, image_path: str, timestamp: int):
     """新增刷脸签到记录"""
-    record = models.SigninRecord(name=name, image_path=image_path, result=result)
+    record = models.SigninRecord(name=name,
+                                 has_work_label=has_work_label,
+                                 image_path=image_path,
+                                 timestamp=timestamp)
     db.add(record)
     db.commit()
     db.refresh(record)
