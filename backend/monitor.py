@@ -63,9 +63,9 @@ class Monitor:
             # today_work_duration_seconds 是 timedelta 的 int
             formatted_duration = str(
                 timedelta(seconds=int(today_work_duration_seconds or 0)))
-            insights["today_work_duration_message"] = f"今日在岗: {formatted_duration}"
+            insights["today_work_duration_message"] = f"{formatted_duration}"
             if today_work_duration_seconds and today_work_duration_seconds >= 120:  # Original threshold was 120 seconds
-                insights["today_work_duration_message"] += "\n已工作较长时间, 注意休息!"
+                insights["today_work_duration_message"] += "\n已工作较长时间!"
             elif today_work_duration_seconds and today_work_duration_seconds > 0:
                 insights["today_work_duration_message"] += "\n请继续保持！"
             else:

@@ -6,7 +6,7 @@
       </div>
       <div class="text-content">
         <h3 class="card-title">{{ title }}</h3>
-        <p class="status-text" :class="statusClass">{{ status }}</p>
+        <p class="status-text" :class="statusClass" v-html="status"></p>
         <p class="description">{{ description }}</p>
       </div>
     </div>

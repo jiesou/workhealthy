@@ -41,7 +41,7 @@
       <StatusCard
         title="工作时长"
         :status="status.today_work_duration_message.replace(/\n/g, '<br>')"
-        description="工作时长"
+        description="今日在岗"
         icon="time"
         type="success"
       />
