@@ -40,7 +40,7 @@ class UdpCameraCapture(BaseCameraCapture):
                 "[UdpCamera] video_url 格式错误，应为 udpserver://ip:port/camera_addr")
         
         server_key = (self.udp_ip, self.udp_port)
-        print(f"[UdpCamera] 启动UDP服务器: {self.udp_ip}:{self.udp_port}，摄像头IP: {self.camera_ip}")
+        print(f"[UdpCamera] 启动UDP图传服务器: {self.udp_ip}:{self.udp_port}，为服务摄像头: {self.camera_ip}")
         if server_key not in self._udp_servers:
             # 创建新的服务器信息
             self._udp_servers[server_key] = {
@@ -66,8 +66,6 @@ class UdpCameraCapture(BaseCameraCapture):
             
             server_info['thread'] = threading.Thread(target=run_loop, daemon=True)
             server_info['thread'].start()
-        
-        print(f"[UdpCamera] server_info: {server_info}")
 
     def stop(self):
         self.is_running = False

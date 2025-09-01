@@ -37,7 +37,7 @@ class HealthAnalyze:
             self.analyze_thread.daemon = True
             self.analyze_thread.start()
 
-            print("健康分析服务已启动")
+            print("[Bootstrap] 健康分析服务已启动")
 
     def stop(self):
         """停止健康分析服务"""

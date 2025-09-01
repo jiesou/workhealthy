@@ -3,12 +3,15 @@ import os
 import traceback
 from backend.detector import BaseDetectionResult, DetectionBox
 
+
 # 导入 Roboflow Inference
 try:
-    print("尝试导入 Roboflow Inference 模块...")
+    print("[WorkLabel] 尝试导入 Roboflow Inference 模块...")
     from inference import get_model
+    from inference.models.owlv2.owlv2 import OwlV2
+    from inference.core.entities.requests.owlv2 import OwlV2InferenceRequest
 except ImportError:
-    print("警告: 无法导入 inference，工牌检测功能可能不可用")
+    print("[WorkLabel] 警告: 无法导入 inference，工牌检测功能可能不可用")
 
 
 class WorkLabel:
@@ -20,18 +23,21 @@ class WorkLabel:
     def __init__(self):
         """初始化工牌检测器"""
         self.result = self.WorkLabelResult()
-        # try:
-        # 确保环境变量中有 API key
-        if not os.getenv('ROBOFLOW_API_KEY'):
-            print("警告: 未设置 ROBOFLOW_API_KEY 环境变量")
-            return
+        try:
+            # 确保环境变量中有 API key
+            if not os.getenv('ROBOFLOW_API_KEY'):
+                print("[WorkLabel] 未设置 ROBOFLOW_API_KEY 环境变量，工牌检测功能将不可用")
+                return
 
-        # 加载您的私有模型
-        self.model = get_model(model_id="jiesou/-hdl2k-instant-2")
-        print("Roboflow 工牌检测模型加载成功")
-        # except Exception as e:
-        #     print(f"加载 Roboflow 模型出错: {e}")
-        #     print("工牌检测功能将不可用")
+            # 加载您的私有模型
+            self.model = get_model(model_id="jiesou/-hdl2k-instant-2")
+            print("[WorkLabel] Roboflow 工牌检测模型加载成功")
+        except KeyError as e:
+            print(f"[WorkLabel] Roboflow 模型类型不支持: {e}")
+            print("[WorkLabel] 提示：是否安装了 inference[transformers]？")
+            self.model = None
+        except Exception as e:
+            print(f"[WorkLabel] 加载 Roboflow 模型出错: {e}，工牌检测功能将不可用")
 
     def detect(self, frame) -> WorkLabelResult:
         """检测图像中的工牌，并返回结果（包含 box）"""
@@ -72,7 +78,7 @@ class WorkLabel:
                         f"[WorkLabel] 检测到工牌: confidence={prediction.confidence:.3f}")
 
         except Exception as e:
-            print(f"工牌检测出错: {e}")
+            print(f"[WorkLabel] 工牌检测出错: {e}")
             traceback.print_exc()
 
         self.result = result

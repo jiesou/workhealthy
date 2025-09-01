@@ -1,9 +1,21 @@
 import uvicorn
 import os
+import signal
 from dotenv import load_dotenv
 
 # 加载环境变量
 load_dotenv()
+
+class MyServer(uvicorn.Server):
+    """自定义Server，处理退出信号"""
+    
+    def install_signal_handlers(self):
+        """重写信号处理器安装方法"""
+        signal.signal(signal.SIGINT, self.force_exit)
+    
+    def force_exit(self):
+        """强制退出处理器"""
+        os._exit(1)
 
 def main():
     host = os.getenv("HOST", "0.0.0.0")
@@ -18,7 +30,8 @@ def main():
     
     # 启动FastAPI应用，确保启用WebSocket支持
     print("=== 正在启动后端服务")
-    uvicorn.run(
+    
+    server = MyServer(uvicorn.Config(
         "backend.api:app",
         host=host,
         port=port,
@@ -27,8 +40,8 @@ def main():
         ws_ping_timeout=30,
         log_level="info",
         access_log=True
-    )
+    ))
+    server.run()
 
 if __name__ == "__main__":
     main()
-    

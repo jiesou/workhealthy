@@ -18,10 +18,10 @@ except ImportError:
 
 # 导入YOLO
 try:
-    print("尝试导入ultralytics YOLO模块...")
+    print("[YOLO] 尝试导入ultralytics YOLO模块...")
     from ultralytics import YOLO
 except ImportError:
-    print("警告: 无法导入ultralytics，部分功能可能不可用")
+    print("[YOLO] 警告: 无法导入ultralytics，部分功能可能不可用")
     YOLO = None
 
 class YoloDetector:
@@ -35,27 +35,26 @@ class YoloDetector:
         """初始化YOLO检测器"""
         self.model = None
         self.result = self.YoloResult()
-        if YOLO is not None:
-            model_path = os.path.join(os.path.dirname(__file__), "models", "yolo11n.pt")
-            if not os.path.exists(os.path.dirname(model_path)):
-                os.makedirs(os.path.dirname(model_path))
-            
-            # 尝试加载模型
-            try:
-                self.model = YOLO("yolo11n.pt")  # 使用预训练的YOLOv11模型
-                # 强制切换到CUDA设备
-                if torch.cuda.is_available():
-                    self.model.to('cuda')
-                    print("YOLO模型已切换到 CUDA 设备:", next(self.model.model.parameters()).device)
-                else:
-                    print("警告：未检测到可用的CUDA设备，YOLO将使用CPU运行。")
-                print("YOLO模型加载成功")
-            except Exception as e:
-                print(f"加载YOLO模型出错: {e}")
-                print("部分功能可能不可用")
-        else:
-            print("YOLO模块不可用，人体检测和水杯检测功能将不可用")
-    
+        if YOLO is None:
+            print("[YOLO] YOLO模块不可用")
+            return
+        model_path = os.path.join(os.path.dirname(__file__), "models", "yolo11n.pt")
+        if not os.path.exists(os.path.dirname(model_path)):
+            os.makedirs(os.path.dirname(model_path))
+        
+        # 尝试加载模型
+        try:
+            self.model = YOLO("yolo11n.pt")  # 使用预训练的YOLOv11模型
+            # 强制切换到CUDA设备
+            if torch.cuda.is_available():
+                self.model.to('cuda')
+                print("[YOLO] YOLO模型已切换到 CUDA 设备:", next(self.model.model.parameters()).device)
+            else:
+                print("[YOLO] 警告：未检测到可用的CUDA设备，YOLO将使用CPU运行。")
+            print("[YOLO] YOLO模型加载成功")
+        except Exception as e:
+            print(f"[YOLO] 加载YOLO模型出错: {e}")
+
     def detect(self, frame):
         """
         检测图像中的人和水杯

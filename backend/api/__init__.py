@@ -24,17 +24,16 @@ from .monitor import router as monitor_router
 # from . import history as history_api # Removed
 from .monitor import monitor_registry
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
-    print("应用启动中...")
+    print("[Lifespan] 应用启动中...")
 
     yield  # 应用运行期间
 
     # 关闭时执行
-    print("应用关闭中...")
+    print("[Lifespan] 应用关闭中...")
     os.kill(os.getpid(), signal.SIGTERM)
 
 # 创建FastAPI应用
@@ -58,7 +57,7 @@ async def root():
 
 @app.get("/monitors")
 async def get_monitors():
-    """获取所有监控器列表"""
+    """获取所有监视终端列表"""
     return {
         "monitors": monitor_registry.monitors.keys(),
     }

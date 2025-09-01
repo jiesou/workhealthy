@@ -12,9 +12,6 @@ from sympy import det
 from torch import Type
 # 导入摄像头捕获
 from backend.camera_capture import create_camera_capture
-# 导入检测器
-from backend.detector.yolo_detector import YoloDetector
-from backend.detector.face_signin import FaceSignin
 # 导入日志记录器
 from backend.logger import ActivityLogger
 
@@ -34,9 +31,6 @@ class VideoProcessor:
     def __init__(self, video_url: str):
         """
         初始化视频处理器
-
-        参数:
-            video_url: 视频流URL或摄像头索引，默认使用本地摄像头（索引0）
         """
         self.video_url = video_url
         # 创建摄像头实例
@@ -44,10 +38,7 @@ class VideoProcessor:
         self.camera.start(video_url)
         print(f"[VideoProcessor] 启动摄像头: {self.camera}")
 
-        self.yolo_detector = YoloDetector()
-        self.face_signin = FaceSignin()
         self.logger = ActivityLogger()
-
         self.status = self.DetectionStatus()
 
         # 帧相关变量
@@ -66,12 +57,17 @@ class VideoProcessor:
 
     def _process_video_stream(self):
         """处理视频流的主循环"""
+        # 在 threading 中导入检测器
+        from backend.detector.yolo_detector import YoloDetector
+        from backend.detector.face_signin import FaceSignin
+        self.yolo_detector = YoloDetector()
+        self.face_signin = FaceSignin()
         last_processing_time = 0
         while True:
             current_time_ms = int(time.time_ns() / 1_000_000)
 
             # 控制处理频率
-            if current_time_ms - last_processing_time < 1000.0 / 5:  # 每秒处理5帧
+            if current_time_ms - last_processing_time < 1000.0 / 2:  # 每秒处理5帧
                 time.sleep(0.01)  # 短暂休眠，避免CPU占用过高
                 continue
 

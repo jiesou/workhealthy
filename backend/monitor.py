@@ -39,7 +39,7 @@ class Monitor:
             # 启动健康分析服务
             self.health_analyze.start()
 
-            print("健康监测服务已启动")
+            print("[Bootstrap] 健康监测服务已启动")
 
     def stop(self):
         """停止健康监测服务"""

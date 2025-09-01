@@ -18,7 +18,7 @@ from backend.monitor import Monitor
 from backend.monitor_registry import MonitorRegistry
 from typing import Optional
 
-# 创建监控注册表
+# 创建监视终端注册表
 monitor_registry = MonitorRegistry()
 monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.100", current_sensor_url="http://192.168.10.101/api/status")
 # monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.102")
@@ -31,8 +31,8 @@ router = APIRouter(prefix="/monitor", tags=["monitor"])
 
 def decode_monitor_url(request: Request, blur_video_url: str) -> tuple[str, Monitor]:
     """
-    依赖注入函数：解析video_url并返回监控器实例
-    返回 (resolved_url, monitor) 元组
+    依赖注入函数：解析video_url并返回Monitor实例
+    返回 (resolved_url, Monitor)
     """
 
     blur_video_url = urllib.parse.unquote(blur_video_url)
@@ -54,18 +54,17 @@ def decode_monitor_url(request: Request, blur_video_url: str) -> tuple[str, Moni
             monitor = monitor_registry.monitors[existing_url]
             return existing_url, monitor
 
-    # 如果没找到匹配的，抛出异常
     raise HTTPException(
         status_code=404, detail=f"Monitor not found")
 
 @router.get("/list")
 async def list_monitors():
-    """获取所有监控器的列表"""
+    """获取所有监视终端的列表"""
     return list(monitor_registry.monitors.keys())
 
 @router.get("/{blur_video_url}/video_feed")
 async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(decode_monitor_url)):
-    """指定监控器的视频流"""
+    """指定监视终端的视频流"""
     resolved_url, monitor = monitor_info
 
     async def generate():
@@ -87,7 +86,7 @@ async def monitor_video_feed(monitor_info: tuple[str, Monitor] = Depends(decode_
 
 @router.websocket("/{blur_video_url}/ws")
 async def websocket_monitor(websocket: WebSocket, blur_video_url: str):  # 这里不能 Depends
-    """指定监控器的WebSocket连接"""
+    """指定监视终端的WebSocket连接"""
     print(f"[/monitor/{blur_video_url}/ws] 收到新的 WebSocket 连接")
     resolved_url, monitor = decode_monitor_url(websocket, blur_video_url)
 
@@ -101,7 +100,7 @@ async def websocket_monitor(websocket: WebSocket, blur_video_url: str):  # 这�
         # 发送欢迎消息
         await websocket.send_json({
             "type": "welcome",
-            "message": f"WebSocket连接已建立 - 监控器 {resolved_url}",
+            "message": f"WebSocket连接已建立 - 监视终端 {resolved_url}",
             "timestamp": time.time(),
             "camera_ip": resolved_url
         })
@@ -138,7 +137,7 @@ async def push_status_updates():
             for video_url in list(connected_clients.keys()):
                 if video_url not in monitor_registry.monitors:
                     raise Exception(f"Push {video_url} Monitor not found")
-                # 找到这个客户端对应的监控器
+                # 找到这个客户端对应的监视终端
                 monitor = monitor_registry.monitors[video_url]
 
                 # today_work_duration logic removed from here
