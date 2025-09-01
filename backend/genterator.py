@@ -69,4 +69,4 @@ class GeneratorService:
         thread.daemon = True
         thread.start()
 
-        return "[GeneratorService] 开始生成流式健康摘要"
+        print("[GeneratorService] Start streaming summary_health")

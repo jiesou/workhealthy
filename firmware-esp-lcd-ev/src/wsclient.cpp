@@ -1,7 +1,7 @@
 #include "wsclient.h"
 #include "lcd.h"
 
-#define WS_SERVER_HOST "192.168.10.101"
+#define WS_SERVER_HOST "192.168.10.102"
 #define WS_SERVER_PORT 8000
 #define WS_SERVER_PATH "/monitor/MY/ws"
 

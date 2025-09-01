@@ -6,7 +6,7 @@
 #include "esp_log.h"
 
 #define CHUNK_LENGTH 1472
-#define UDP_SERVER_IP "192.168.10.101"
+#define UDP_SERVER_IP "192.168.10.102"
 #define UDP_SERVER_PORT 8099
 
 static const char *TAG = "UDP_CLIENT";

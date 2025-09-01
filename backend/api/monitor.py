@@ -20,7 +20,7 @@ from typing import Optional
 
 # 创建监控注册表
 monitor_registry = MonitorRegistry()
-monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.100", current_sensor_url="http://192.168.11.120/api/status")
+monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.100", current_sensor_url="http://192.168.10.101/api/status")
 # monitor_registry.register("udpserver://0.0.0.0:8099/192.168.10.102")
 
 # 存储所有连接的 WebSockets 客户端，按 video_url 分组
