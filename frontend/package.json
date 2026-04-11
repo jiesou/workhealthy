@@ -18,7 +18,7 @@
   "dependencies": {
     "@tresjs/cientos": "^4.3.1",
     "@tresjs/core": "^4.3.6",
-    "axios": "^1.6.2",
+    "axios": "^1.15.0",
     "bootstrap": "^5.3.2",
     "chart.js": "^4.4.0",
     "three": "^0.177.0",
